@@ -25,9 +25,9 @@ $ source ve/bin/activate
 
 2. Run the desired scripts from the 'off-policy-actor-critic' directory:
 ```
-(ve)$ python src/experiments/mountain_car/generate_data.py
-(ve)$ python src/experiments/mountain_car/run_offpac.py
-(ve)$ python src/experiments/mountain_car/evaluate_policies.py
+(ve)$ python scripts/tiny_counterexample/generate_data.py
+(ve)$ python scripts/tiny_counterexample/run_offpac.py
+(ve)$ python scripts/tiny_counterexample/evaluate_policies.py
 ```
 
 3. Deactivate the virtual environment when finished:

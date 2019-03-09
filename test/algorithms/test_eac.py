@@ -1,12 +1,12 @@
 import numpy as np
 import unittest
-from src.algorithms.offpac import OffPAC, OffPACActor
+from src.algorithms.eac import EAC, EACActor
 
 
-class OffPACActorTests(unittest.TestCase):
+class EACActorTests(unittest.TestCase):
 
     def test_learn_simple(self):
-        opa = OffPACActor(2, 3, .1, .9)
+        opa = EACActor(2, 3, .1, .9)
         x_t = np.array([1., 1., 1.])
         a_t = 0
         gamma_t = 1.
@@ -17,11 +17,9 @@ class OffPACActorTests(unittest.TestCase):
 
         # If the action taken turned out to be better than expected, one would expect the probability of taking it in the future to increase:
         assert opa.policy.pi(x_t, a_t) > 0.5
-        # One would also expect the eligibility traces to have been updated:
-        assert np.all(opa.e!=0.)
 
     def test_learn_complex(self):
-        opa = OffPACActor(2, 3, .1, .99)
+        opa = EACActor(2, 3, .1, .99)
         x_t = np.array([1., 1., 1.])
         a_t = 0
         gamma_t = 1.
@@ -34,12 +32,9 @@ class OffPACActorTests(unittest.TestCase):
 
         # If the action taken turned out to be better than expected, one would expect the probability of taking it in the future to increase:
         assert opa.policy.pi(x_t, a_t) > 0.5
-        # One would also expect the eligibility traces to begin piling up:
-        assert np.all(opa.e!=0.)
-        assert np.all(opa.e[a_t] > 0.5)
 
     def test_pi_equal(self):
-        opa = OffPACActor(2, 1, None, None)
+        opa = EACActor(2, 1, None, None)
         x_t = np.array([[1.]])
 
         pi = opa.policy.pi(x_t)
@@ -49,7 +44,7 @@ class OffPACActorTests(unittest.TestCase):
 
     def test_grad_log_pi_simple(self):
         # Equiprobable random policy with 2 actions and 3 features:
-        opa = OffPACActor(2, 3, None, None)
+        opa = EACActor(2, 3, None, None)
         x_t = np.array([0., 1., 1.])
         a_t = 0
 
@@ -62,7 +57,7 @@ class OffPACActorTests(unittest.TestCase):
         assert (grad_log_pi[1] <= 0.).all()
 
     def test_grad_log_pi_complex(self):
-        opa = OffPACActor(3, 4, None, None)
+        opa = EACActor(3, 4, None, None)
         opa.u = np.array([[.0, .01, .05, 0.1], [.2, .25, .3, .3], [.51, .52, .55, .6]])
         x_t = np.array([.0, .1, .25, .5])
         a_t = 0
