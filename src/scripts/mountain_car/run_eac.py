@@ -1,15 +1,10 @@
-# Add the src directory to the path, because python doesn't look in subfolders:
-import sys, os
-src_path = os.path.join(os.getcwd(), '.')
-if src_path not in sys.path:
-    sys.path.append(src_path)
-
+import os
+import json
 import argparse
 import numpy as np
-from src import utils
 from src.algorithms.eac import EAC
 from src.function_approximation.tile_coder import TileCoder
-from generate_data import num_actions, environment_name, behaviour_policy_name
+from src.scripts.mountain_car.generate_experience import num_actions, environment_name, behaviour_policy_name
 
 if __name__ == '__main__':
 
