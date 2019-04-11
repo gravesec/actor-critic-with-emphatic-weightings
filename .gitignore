@@ -3,6 +3,7 @@
 __pycache__
 ve
 output
+data
 .ipynb_checkpoints
 *.aux
 *.log
