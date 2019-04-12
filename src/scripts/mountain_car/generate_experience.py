@@ -12,6 +12,8 @@ num_actions = 3
 transition_dtype = [('s_t', float, (2,)), ('gamma_t', float, 1), ('a_t', int, 1), ('s_tp1', float, (2,)), ('r_tp1', float, 1), ('gamma_tp1', float, 1)]
 
 
+# TODO: Update this script to allow concatenation of experience; when it turns out there aren't enough runs, we don't want to have to throw away everything we've done so far.
+
 def generate_experience(experience, run_num, num_timesteps, random_seed):
     
     # Initialize the environment:
@@ -52,16 +54,16 @@ def generate_experience(experience, run_num, num_timesteps, random_seed):
 if __name__ == '__main__':
 
     # Parse command line arguments:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--num_runs', type=int, default=5, help='the number of runs of data to generate')
-    parser.add_argument('--num_timesteps', type=int, default=100000, help='the number of timesteps of experience to generate per run')
-    parser.add_argument('--random_seeds', type=int, nargs='*', help='the random seeds to use for the corresponding run')
-    parser.add_argument('--num_cpus', type=int, default=-1, help='the number of cpus to use')
+    parser = argparse.ArgumentParser(description='A script to generate experience from a uniform random policy on the Mountain Car environment in parallel.')
+    parser.add_argument('--num_runs', type=int, default=5, help='The number of runs of experience to generate')
+    parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
+    parser.add_argument('--random_seeds', type=int, nargs='*', default=None, help='The random seeds to use for the corresponding runs')
+    parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use')
     args = parser.parse_args()
 
     # If no random seeds were given, generate them in a reasonable way:
     if args.random_seeds is None:
-        args.random_seeds = [seeding.create_seed(None) for _ in range(args.num_runs)]
+        args.random_seeds = [seeding.hash_seed(seeding.create_seed(None)) for _ in range(args.num_runs)]
     elif len(args.random_seeds) != args.num_runs:
         parser.error('the number of random seeds should be equal to the number of runs')
 
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     output_directory = os.path.join('data', environment_name, behaviour_policy_name)
     os.makedirs(output_directory, exist_ok=True)
 
-    # Write the command line arguments used to a file (memmap doesn't save shape info):
+    # Write the command line arguments to a file (memmap doesn't save shape info):
     args_file_path = os.path.join(output_directory, 'args.json')
     with open(args_file_path, 'w') as args_file:
         json.dump(vars(args), args_file, indent=4, sort_keys=True)
