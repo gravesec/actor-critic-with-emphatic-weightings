@@ -1,18 +1,18 @@
 import os
 import gym
-import json
 import argparse
 import numpy as np
 from gym.utils import seeding
 from joblib import Parallel, delayed
+from src import utils
 
-environment_name = "MountainCar-v0"
-behaviour_policy_name = 'random'
+
+output_directory_name = 'data'
+environment_name = 'MountainCar-v0'
+behaviour_policy_name = 'random_policy'
 num_actions = 3
 transition_dtype = [('s_t', float, (2,)), ('gamma_t', float, 1), ('a_t', int, 1), ('s_tp1', float, (2,)), ('r_tp1', float, 1), ('gamma_tp1', float, 1)]
 
-
-# TODO: Update this script to allow concatenation of experience; when it turns out there aren't enough runs, we don't want to have to throw away everything we've done so far.
 
 def generate_experience(experience, run_num, num_timesteps, random_seed):
     
@@ -54,11 +54,13 @@ def generate_experience(experience, run_num, num_timesteps, random_seed):
 if __name__ == '__main__':
 
     # Parse command line arguments:
-    parser = argparse.ArgumentParser(description='A script to generate experience from a uniform random policy on the Mountain Car environment in parallel.')
+    parser = argparse.ArgumentParser(description='A script to generate experience from a uniform random policy on the Mountain Car environment in parallel.', fromfile_prefix_chars='@')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seeds', type=int, nargs='*', default=None, help='The random seeds to use for the corresponding runs')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use')
+    parser.add_argument('--experiment_name', default='experiment1', help='The directory (within "{}") to write files to'.format(os.path.join(output_directory_name, environment_name)))
+    parser.add_argument('--args_file', default='generate_experience.args', help='Name of the file to store the command line arguments in')
     args = parser.parse_args()
 
     # If no random seeds were given, generate them in a reasonable way:
@@ -68,20 +70,20 @@ if __name__ == '__main__':
         parser.error('the number of random seeds should be equal to the number of runs')
 
     # Create the output directory:
-    output_directory = os.path.join('data', environment_name, behaviour_policy_name)
+    output_directory = os.path.join(output_directory_name, environment_name, args.experiment_name)
     os.makedirs(output_directory, exist_ok=True)
 
-    # Write the command line arguments to a file (memmap doesn't save shape info):
-    args_file_path = os.path.join(output_directory, 'args.json')
-    with open(args_file_path, 'w') as args_file:
-        json.dump(vars(args), args_file, indent=4, sort_keys=True)
+    # Write the command line arguments to a file (for reproducibility):
+    args_file_path = os.path.join(output_directory, args.args_file)
+    utils.save_args_to_file(args, args_file_path)
 
     # Create the memmapped array of experience to be populated in parallel:
-    experience_file_path = os.path.join(output_directory, 'experience.npy')
+    experience_directory = os.path.join(output_directory, behaviour_policy_name)
+    os.makedirs(experience_directory, exist_ok=True)
+    experience_file_path = os.path.join(experience_directory, 'experience.npy')
     experience = np.memmap(experience_file_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
-    # Generate the experience concurrently:
-    Parallel(n_jobs=args.num_cpus)(delayed(generate_experience)(experience, run_num, args.num_timesteps, random_seed) for run_num, random_seed in enumerate(args.random_seeds))
-
-    # Or sequentially (for debugging):
-    # [generate_experience(experience, run_num, args.num_timesteps, random_seed) for run_num, random_seed in enumerate(args.random_seeds)]
+    # Generate the experience in parallel:
+    Parallel(n_jobs=args.num_cpus, verbose=10)(
+        delayed(generate_experience)(experience, run_num, args.num_timesteps, random_seed) for run_num, random_seed in
+        enumerate(args.random_seeds))
