@@ -85,7 +85,7 @@ def tiles (ihtORsize, numtilings, floats, ints=[], readonly=False):
         Tiles.append(hashcoords(coords, ihtORsize, readonly))
     return Tiles
 
-def tileswrap (ihtORsize, numtilings, floats, wrawidths, ints=[], readonly=False):
+def tileswrap (ihtORsize, numtilings, floats, wrapwidths, ints=[], readonly=False):
     """returns num-tilings tile indices corresponding to the floats and ints, wrapping some floats"""
     qfloats = [floor(f*numtilings) for f in floats]
     Tiles = []
