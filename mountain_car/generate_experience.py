@@ -1,23 +1,19 @@
 import os
 import gym
+import random
 import argparse
 import numpy as np
-from gym.utils import seeding
+from pathlib import Path
 from joblib import Parallel, delayed
-from src import utils
 
 
-output_directory_name = 'data'
-environment_name = 'MountainCar-v0'
-behaviour_policy_name = 'random_policy'
-num_actions = 3
 transition_dtype = [('s_t', float, (2,)), ('gamma_t', float, 1), ('a_t', int, 1), ('s_tp1', float, (2,)), ('r_tp1', float, 1), ('gamma_tp1', float, 1)]
 
 
 def generate_experience(experience, run_num, num_timesteps, random_seed):
     
     # Initialize the environment:
-    env = gym.make(environment_name).env  # Get the underlying environment object to bypass the built-in timestep limit.
+    env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
 
     # Configure random state for the run:
     env.seed(random_seed)
@@ -30,7 +26,7 @@ def generate_experience(experience, run_num, num_timesteps, random_seed):
     for t in range(num_timesteps):
 
         # Select an action:
-        a_t = rng.choice(env.action_space.n)  # equiprobable random policy
+        a_t = rng.choice(env.action_space.n) # equiprobable random policy
 
         # Take action a_t, observe next state s_tp1 and reward r_tp1:
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
@@ -57,33 +53,31 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to generate experience from a uniform random policy on the Mountain Car environment in parallel.', fromfile_prefix_chars='@')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
-    parser.add_argument('--random_seeds', type=int, nargs='*', default=None, help='The random seeds to use for the corresponding runs')
-    parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use')
-    parser.add_argument('--experiment_name', default='experiment1', help='The directory (within "{}") to write files to'.format(os.path.join(output_directory_name, environment_name)))
-    parser.add_argument('--args_file', default='generate_experience.args', help='Name of the file to store the command line arguments in')
+    parser.add_argument('--random_seed', type=int, default=3139378768, help='The random seed to use')
+    parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
+    parser.add_argument('--backend', type=str, default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads)')
+    parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to save experiment files to')
     args = parser.parse_args()
 
-    # If no random seeds were given, generate them in a reasonable way:
-    if args.random_seeds is None:
-        args.random_seeds = [seeding.hash_seed(seeding.create_seed(None)) for _ in range(args.num_runs)]
-    elif len(args.random_seeds) != args.num_runs:
-        parser.error('the number of random seeds should be equal to the number of runs')
+    # Generate the random seed for each run without replacement:
+    random.seed(args.random_seed)
+    random_seeds = random.sample(range(2**32), args.num_runs)
 
     # Create the output directory:
-    output_directory = os.path.join(output_directory_name, environment_name, args.experiment_name)
-    os.makedirs(output_directory, exist_ok=True)
+    experiment_path = Path(args.experiment_name)
+    os.makedirs(experiment_path, exist_ok=True)
 
-    # Write the command line arguments to a file (for reproducibility):
-    args_file_path = os.path.join(output_directory, args.args_file)
-    utils.save_args_to_file(args, args_file_path)
+    # Save the command line arguments in a format interpretable by argparse:
+    with open(experiment_path / 'experience.args', 'w') as args_file:
+        for key, value in vars(args).items():
+            # if isinstance(value, list):
+            #     value = '\n'.join(str(i) for i in value)
+            args_file.write('--{}\n{}\n'.format(key, value))
 
     # Create the memmapped array of experience to be populated in parallel:
-    experience_directory = os.path.join(output_directory, behaviour_policy_name)
-    os.makedirs(experience_directory, exist_ok=True)
-    experience_file_path = os.path.join(experience_directory, 'experience.npy')
-    experience = np.memmap(experience_file_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
+    experience = np.memmap(experiment_path / 'experience.npy', shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=10)(
+    Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
         delayed(generate_experience)(experience, run_num, args.num_timesteps, random_seed) for run_num, random_seed in
-        enumerate(args.random_seeds))
+        enumerate(random_seeds))
