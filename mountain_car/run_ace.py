@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
-from .ace import ACE, TileCoder
+from .ace import TileCoder, TOETD, ACE
 from .generate_experience import transition_dtype
 
 
@@ -26,10 +26,11 @@ def run_ace(policies, experience, num_timesteps, checkpoint_interval, num_featur
                 num_tiles_idx, num_tiles,
                 num_tilings_idx, num_tilings,
                 bias_unit_idx, bias_unit):
-    # Configure the agent:
-    agent = ACE()
 
-    tc = TileCoder(min_values=min_state_values, max_values=max_state_values, num_tiles=[num_tiles, num_tiles], num_tilings=num_tilings, num_features=num_features, bias_unit=bias_unit)
+    # Configure the agent:
+    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, num_features, bias_unit)
+    actor = ACE(num_actions, num_features)
+    critic = TOETD(num_features, 1., alpha_c)
 
     # Process the experience:
     for t in range(num_timesteps):
@@ -54,6 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', help='Step sizes for the critic')
     parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', help='Trace decay rates for the critic')
     parser.add_argument('--eta', '--offpac_ace_tradeoff', type=float, nargs='+', default=[0.,1.], help='Values for the parameter that interpolates between OffPAC (0) and ACE (1)')
+    # parser.add_argument('--i', '--interest', type=exec, default='def i(x_t): return 1.', help='Interest function to use')
     parser.add_argument('--num_tiles', type=int, nargs='+', default=4, help='The number of tiles to use in the tile coder')
     parser.add_argument('--num_tilings', type=int, nargs='+', default=4, help='The number of tilings to use in the tile coder')
     parser.add_argument('--num_features', type=int, default=1024, help='The number of features to use in the tile coder')
