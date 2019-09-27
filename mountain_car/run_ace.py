@@ -37,6 +37,8 @@ class ACE:
 
 
 def run_ace(parameters):
+    # Set up the tile coder:
+    tc = TileCoder(min_values=[-1.2, -0.07], max_values=[0.6, 0.07], num_tiles=[args.num_tiles, args.num_tiles], num_tilings=args.num_tilings, num_features=args.num_features, bias_unit=args.bias_unit)
     pass
 
 
@@ -59,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--eta', '--offpac_ace_tradeoff', type=float, nargs='+', default=[0.,1.], help='Values for the parameter that interpolates between OffPAC (0) and ACE (1)')
     parser.add_argument('--num_tiles', type=int, nargs='+', default=4, help='The number of tiles to use in the tile coder')
     parser.add_argument('--num_tilings', type=int, nargs='+', default=4, help='The number of tilings to use in the tile coder')
-    parser.add_argument('--num_features', type=int, nargs='+', default=1024, help='The number of features to use in the tile coder')
+    parser.add_argument('--num_features', type=int, default=1024, help='The number of features to use in the tile coder')
     parser.add_argument('--bias_unit', type=int, nargs='+', default=1, help='Whether or not to include a bias unit in the tile coder')
     args = parser.parse_args()
 
@@ -71,47 +73,34 @@ if __name__ == '__main__':
                 value = '\n'.join(str(i) for i in value)
             args_file.write('--{}\n{}\n'.format(key, value))
 
-
-
+    # Compute the number of policies that will be saved during training:
     num_policies = args.num_timesteps / args.checkpoint_interval
+
     if args.iteration_type == 'combinations':
-        # Check all possible combinations of parameters:
-
-        # Ensure parameter settings aren't duplicated:
-        args.alpha_a = set(args.alpha_a)
-        args.lambda_a = set(args.lambda_a)
-        args.alpha_c = set(args.alpha_c)
-        args.lambda_c = set(args.lambda_c)
-        args.eta = set(args.eta)
-        args.num_tiles = set(args.num_tiles)
-        args.num_tilings = set(args.num_tilings)
-        args.num_features = set(args.num_features)
-        args.bias_unit = set(args.bias_unit)
-
-        policies_shape = (len(args.alpha_a), len(args.lambda_a), len(args.alpha_c), len(args.lambda_c), len(args.eta), args.num_runs, num_policies, num_actions, args.num_features)
-
+        # Run ACE for all possible combinations of the given parameters:
+        policies_shape = (len(args.alpha_a), len(args.lambda_a), len(args.alpha_c), len(args.lambda_c), len(args.eta), len(args.num_tiles), len(args.num_tilings), len(args.bias_unit), args.num_runs, num_policies, num_actions, args.num_features)
     else:
-        # Check each tuple of parameters:
-        params = [args.alpha_a, args.lambda_a, args.alpha_c, args.lambda_c, args.eta, args.num_tiles, args.num_tilings, args.num_features, args.bias_unit]
-        assert all(len(param) == len(args.alpha_a) or len(param) == 1 for param in params)
-        policies_shape = ()
-
-    # Create the memmapped array of policies to be populated in parallel:
-    policies = np.memmap(experiment_path / 'policies.npy', shape=policies_shape, mode='w+')
-
-    # Set up the tile coder:
-    tc = TileCoder(min_values=[-1.2, -0.07], max_values=[0.6, 0.07], num_tiles=[args.num_tiles, args.num_tiles], num_tilings=args.num_tilings, num_features=args.num_features, bias_unit=args.bias_unit)
+        # Run ACE for each set of parameters:
+        parameters = [args.alpha_a, args.lambda_a, args.alpha_c, args.lambda_c, args.eta, args.num_tiles, args.num_tilings, args.bias_unit]
+        lens = [len(p) for p in parameters]
+        policies_shape = (max(lens), args.num_runs, num_policies, num_actions, args.num_features)
 
     # Create the memmapped array of learned policies to be populated in parallel:
-    policies_file_path = os.path.join(output_directory, 'policies.npy')
-    policies_shape = (args.num_runs, len(args.alpha_a), len(args.lambda_a), len(args.alpha_c), len(args.lambda_c), len(args.eta), len(args.checkpoints), num_actions, tc.num_features)
-    policies = np.memmap(policies_file_path, shape=policies_shape, mode='w+')
+    policies = np.memmap(experiment_path / 'policies.npy', shape=policies_shape, mode='w+')
 
     # Load the input data as a memmap to prevent multiple copies being loaded into memory:
-    experience_file_path = os.path.join(input_directory, 'experience.npy')
-    experience = np.memmap(experience_file_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r')
+    experience = np.memmap(experiment_path / 'experience.npy', shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r')
 
-    # Run ACE concurrently:
+    # Run ACE in parallel:
+    if args.iteration_type == 'combinations':
+        Parallel(n_jobs=args.num_cpus, verbose=10)(
+            delayed(run_ace)(
+                policies, experience, args.num_timesteps, , run_num, alpha_a_idx, alpha_a, lambda_a_idx, lambda_a, alpha_c_idx, alpha_c, lambda_c_idx, lambda_c, eta_idx, eta) for run_num in range(args.num_runs) for alpha_a_idx, alpha_a in enumerate(args.alpha_a) for lambda_a_idx, lambda_a in enumerate(args.lambda_a) for alpha_c_idx, alpha_c in enumerate(args.alpha_c) for lambda_c_idx, lambda_c in enumerate(args.lambda_c) for eta_idx, eta in enumerate(args.eta))
+    else:
+        Parallel(n_jobs=args.num_cpus, verbose=10)(delayed(run_ace)(experience, policies, tc, args.num_timesteps, args.checkpoints, run_num, alpha_a_idx, alpha_a, lambda_a_idx, lambda_a, alpha_c_idx, alpha_c, lambda_c_idx, lambda_c, eta_idx, eta) for run_num in range(args.num_runs) for alpha_a_idx, alpha_a in enumerate(args.alpha_a) for lambda_a_idx, lambda_a in enumerate(args.lambda_a) for alpha_c_idx, alpha_c in enumerate(args.alpha_c) for lambda_c_idx, lambda_c in enumerate(args.lambda_c) for eta_idx, eta in enumerate(args.eta))
+
+    del policies
+
     Parallel(n_jobs=args.num_cpus, verbose=10)(delayed(run_ace_tc)(experience, policies, tc, args.num_timesteps, args.checkpoints, run_num, alpha_a_idx, alpha_a, lambda_a_idx, lambda_a, alpha_c_idx, alpha_c, lambda_c_idx, lambda_c, eta_idx, eta) for run_num in range(args.num_runs) for alpha_a_idx, alpha_a in enumerate(args.alpha_a) for lambda_a_idx, lambda_a in enumerate(args.lambda_a) for alpha_c_idx, alpha_c in enumerate(args.alpha_c) for lambda_c_idx, lambda_c in enumerate(args.lambda_c) for eta_idx, eta in enumerate(args.eta))
 
 
