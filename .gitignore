@@ -4,6 +4,7 @@ __pycache__
 ve
 output
 data
+experiment*
 .ipynb_checkpoints
 *.aux
 *.log
