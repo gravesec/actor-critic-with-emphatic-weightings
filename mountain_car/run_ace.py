@@ -1,45 +1,39 @@
-import os
 import argparse
 import numpy as np
 from pathlib import Path
-from itertools import product
 from joblib import Parallel, delayed
-from .generate_experience import transition_dtype, num_actions
-from .tiles3 import tiles
+from .ace import ACE, TileCoder
+from .generate_experience import transition_dtype
 
 
-class TileCoder:
-    def __init__(self, min_values, max_values, num_tiles, num_tilings, num_features, bias_unit=False):
-        self.num_tiles = np.array(num_tiles)
-        self.scale_factor = self.num_tiles / (np.array(max_values) - np.array(min_values))
-        self.num_tilings = num_tilings
-        self.bias_unit = bias_unit
-        self.num_features = num_features
-        self.num_active_features = self.num_tilings + self.bias_unit
-
-    def indices(self, observations):
-        return np.array(tiles(int(self.num_features - self.bias_unit), self.num_tilings, list(np.array(observations) * self.scale_factor)), dtype=np.intp)
-
-    def features(self, indices):
-        features = np.zeros(self.num_features)
-        features[indices] = 1.
-        if self.bias_unit:
-            features[self.num_features - 1] = 1.
-        return features
+# TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
+# TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
+# TODO: Remove references to actor eligibility traces.
+# TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
+num_actions = 3
+min_state_values = [-1.2, -0.07]
+max_state_values = [0.6, 0.07]
 
 
-class ACE:
-    def __init__(self):
+def run_ace(policies, experience, num_timesteps, checkpoint_interval, num_features,
+                run_num,
+                gamma_idx, gamma,
+                alpha_a_idx, alpha_a,
+                lambda_a_idx, lambda_a,
+                alpha_c_idx, alpha_c,
+                lambda_c_idx, lambda_c,
+                eta_idx, eta,
+                num_tiles_idx, num_tiles,
+                num_tilings_idx, num_tilings,
+                bias_unit_idx, bias_unit):
+    # Configure the agent:
+    agent = ACE()
+
+    tc = TileCoder(min_values=min_state_values, max_values=max_state_values, num_tiles=[num_tiles, num_tiles], num_tilings=num_tilings, num_features=num_features, bias_unit=bias_unit)
+
+    # Process the experience:
+    for t in range(num_timesteps):
         pass
-
-    def learn(self):
-        pass
-
-
-def run_ace(parameters):
-    # Set up the tile coder:
-    tc = TileCoder(min_values=[-1.2, -0.07], max_values=[0.6, 0.07], num_tiles=[args.num_tiles, args.num_tiles], num_tilings=args.num_tilings, num_features=args.num_features, bias_unit=args.bias_unit)
-    pass
 
 
 if __name__ == '__main__':
@@ -54,6 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\')')
 
     parser.add_argument('--iteration_type', type=str, choices=['corresponding', 'combinations'], default='corresponding', help='Whether to iterate over corresponding parameter settings (zip), or all possible combinations of parameter settings (product)')
+    parser.add_argument('--gamma', '--discount_rates', type=float, nargs='+', default=[1.], help='Discount rates')
     parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', help='Step sizes for the actor')
     parser.add_argument('--lambda_a', '--actor_trace_decay_rates', type=float, nargs='+', default=[0.], help='Trace decay rates for the actor')
     parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', help='Step sizes for the critic')
@@ -73,71 +68,57 @@ if __name__ == '__main__':
                 value = '\n'.join(str(i) for i in value)
             args_file.write('--{}\n{}\n'.format(key, value))
 
-    # Compute the number of policies that will be saved during training:
-    num_policies = args.num_timesteps / args.checkpoint_interval
-
+    # Run ACE:
     if args.iteration_type == 'combinations':
-        # Run ACE for all possible combinations of the given parameters:
-        policies_shape = (len(args.alpha_a), len(args.lambda_a), len(args.alpha_c), len(args.lambda_c), len(args.eta), len(args.num_tiles), len(args.num_tilings), len(args.bias_unit), args.num_runs, num_policies, num_actions, args.num_features)
+        # Compute the number of intermediate policies that will be saved during training:
+        num_policies = args.num_timesteps / args.checkpoint_interval
+
+        # Determine the required shape of the memmapped array of policies:
+        policies_shape = (args.num_runs, len(args.gamma), len(args.alpha_a), len(args.lambda_a), len(args.alpha_c), len(args.lambda_c), len(args.eta), len(args.num_tiles), len(args.num_tilings), len(args.bias_unit), num_policies, num_actions, args.num_features)
+
+        # Create the memmapped array of learned policies to be populated in parallel:
+        policies = np.memmap(experiment_path / 'policies.npy', shape=policies_shape, mode='w+')
+
+        # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
+        experience = np.memmap(experiment_path / 'experience.npy', shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r')
+
+        # Run ACE for all combinations of the given parameters in parallel:
+        Parallel(n_jobs=args.num_cpus, verbose=10)(
+            delayed(run_ace)(
+                policies, experience, args.num_timesteps, args.checkpoint_interval, args.num_features,
+                run_num,
+                gamma_idx, gamma,
+                alpha_a_idx, alpha_a,
+                lambda_a_idx, lambda_a,
+                alpha_c_idx, alpha_c,
+                lambda_c_idx, lambda_c,
+                eta_idx, eta,
+                num_tiles_idx, num_tiles,
+                num_tilings_idx, num_tilings,
+                bias_unit_idx, bias_unit
+            )
+            for run_num in range(args.num_runs)
+            for gamma_idx, gamma in enumerate(args.gamma)
+            for alpha_a_idx, alpha_a in enumerate(args.alpha_a)
+            for lambda_a_idx, lambda_a in enumerate(args.lambda_a)
+            for alpha_c_idx, alpha_c in enumerate(args.alpha_c)
+            for lambda_c_idx, lambda_c in enumerate(args.lambda_c)
+            for eta_idx, eta in enumerate(args.eta)
+            for num_tiles_idx, num_tiles in enumerate(args.num_tiles)
+            for num_tilings_idx, num_tilings in enumerate(args.num_tilings)
+            for bias_unit_idx, bias_unit in enumerate(args.bias_unit)
+        )
+
+        # Close the memmap files:
+        del experience
+        del policies
+
     else:
+        # Compute the number of intermediate policies that will be saved during training:
+        num_policies = args.num_timesteps / args.checkpoint_interval
+
         # Run ACE for each set of parameters:
         parameters = [args.alpha_a, args.lambda_a, args.alpha_c, args.lambda_c, args.eta, args.num_tiles, args.num_tilings, args.bias_unit]
         lens = [len(p) for p in parameters]
         policies_shape = (max(lens), args.num_runs, num_policies, num_actions, args.num_features)
 
-    # Create the memmapped array of learned policies to be populated in parallel:
-    policies = np.memmap(experiment_path / 'policies.npy', shape=policies_shape, mode='w+')
-
-    # Load the input data as a memmap to prevent multiple copies being loaded into memory:
-    experience = np.memmap(experiment_path / 'experience.npy', shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r')
-
-    # Run ACE in parallel:
-    if args.iteration_type == 'combinations':
-        Parallel(n_jobs=args.num_cpus, verbose=10)(
-            delayed(run_ace)(
-                policies, experience, args.num_timesteps, , run_num, alpha_a_idx, alpha_a, lambda_a_idx, lambda_a, alpha_c_idx, alpha_c, lambda_c_idx, lambda_c, eta_idx, eta) for run_num in range(args.num_runs) for alpha_a_idx, alpha_a in enumerate(args.alpha_a) for lambda_a_idx, lambda_a in enumerate(args.lambda_a) for alpha_c_idx, alpha_c in enumerate(args.alpha_c) for lambda_c_idx, lambda_c in enumerate(args.lambda_c) for eta_idx, eta in enumerate(args.eta))
-    else:
-        Parallel(n_jobs=args.num_cpus, verbose=10)(delayed(run_ace)(experience, policies, tc, args.num_timesteps, args.checkpoints, run_num, alpha_a_idx, alpha_a, lambda_a_idx, lambda_a, alpha_c_idx, alpha_c, lambda_c_idx, lambda_c, eta_idx, eta) for run_num in range(args.num_runs) for alpha_a_idx, alpha_a in enumerate(args.alpha_a) for lambda_a_idx, lambda_a in enumerate(args.lambda_a) for alpha_c_idx, alpha_c in enumerate(args.alpha_c) for lambda_c_idx, lambda_c in enumerate(args.lambda_c) for eta_idx, eta in enumerate(args.eta))
-
-    del policies
-
-    Parallel(n_jobs=args.num_cpus, verbose=10)(delayed(run_ace_tc)(experience, policies, tc, args.num_timesteps, args.checkpoints, run_num, alpha_a_idx, alpha_a, lambda_a_idx, lambda_a, alpha_c_idx, alpha_c, lambda_c_idx, lambda_c, eta_idx, eta) for run_num in range(args.num_runs) for alpha_a_idx, alpha_a in enumerate(args.alpha_a) for lambda_a_idx, lambda_a in enumerate(args.lambda_a) for alpha_c_idx, alpha_c in enumerate(args.alpha_c) for lambda_c_idx, lambda_c in enumerate(args.lambda_c) for eta_idx, eta in enumerate(args.eta))
-
-
-
-
-    # Old script for reference purposes:
-
-    # agent = EAC(num_actions, tc.num_features, args.alpha_u, args.alpha_v, args.alpha_w, args.lamda_v, args.lamda_a, args.bias_unit == 2)
-    #
-    # # Load data for the run:
-    # data_file_path = 'output/{}/behaviour_policies/{}/runs/{}/data.npz'.format(environment_name, behaviour_policy_name, args.run)
-    # npzfile = np.load(data_file_path)
-    # transitions = npzfile['transitions']
-    #
-    # num_policies = int(len(transitions) / args.checkpoint_interval)
-    # policies = np.empty((num_policies, *agent.actor.policy.u.shape))
-    # for t, transition in enumerate(transitions):
-    #     s_t, gamma_t, a_t, s_tp1, r_tp1, gamma_tp1 = transition
-    #
-    #     # Create feature vectors from observations:
-    #     x_t = tc.features(s_t)
-    #     x_tp1 = tc.features(s_tp1)
-    #
-    #     # Compute rho:
-    #     pi_t = agent.actor.policy.pi(x_t, a_t)
-    #     b_t = 1. / num_actions  # assume equiprobable random behaviour policy
-    #     rho_t = pi_t / b_t
-    #
-    #     # Update the learner:
-    #     agent.learn(x_t, gamma_t, a_t, r_tp1, x_tp1, gamma_tp1, rho_t)
-    #
-    #     # If it's a checkpoint timestep,
-    #     if t % args.checkpoint_interval == 0:
-    #         # store the policy:
-    #         policies[t // args.checkpoint_interval] = np.copy(agent.actor.policy.u)
-    #
-    # # Save the stored policies for later evaluation:
-    # policies_file_path = 'output/{}/behaviour_policies/{}/algorithms/{}/bias_unit/{}/alpha_u/{}/alpha_v/{}/alpha_w/{}/lamda_v/{}/lamda_a/{}/runs/{}/policies.npz'.format(environment_name, behaviour_policy_name, algorithm_name, args.bias_unit, args.alpha_u, args.alpha_v, args.alpha_w, args.lamda_v, args.lamda_a, args.run)
-    # utils.create_directory(policies_file_path)
-    # np.savez_compressed(policies_file_path, policies=policies)
