@@ -8,7 +8,10 @@ from joblib import Parallel, delayed
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
-
+# TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
+num_actions = 3
+min_state_values = [-1.2, -0.07]
+max_state_values = [0.6, 0.07]
 transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int, 1), ('r_tp1', float, 1), ('s_tp1', float, (2,)), ('terminal', bool, 1)])
 
 

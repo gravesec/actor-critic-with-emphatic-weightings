@@ -47,6 +47,7 @@ class TOETD:
 
     def learn(self, phi, phiPrime, R, rho, gm, lm, I, alpha):
         delta = R + gm * np.dot(self.theta, phiPrime) - np.dot(self.theta, phi)
+
         self.ep = rho * (self.prevgm * self.prevlm * self.ep + self.M * (1 - rho * self.prevgm * self.prevlm * np.dot(self.ep, phi)) * phi)
         Delta = delta * self.ep + np.dot(self.theta - self.prevtheta, phi) * (self.ep - rho * self.M * phi)
         self.prevtheta = self.theta.copy()
@@ -57,8 +58,8 @@ class TOETD:
         self.prevlm = lm
         self.prevI = I
 
-    def estimate(self, phi):
-        return np.dot(self.theta, phi)
+    def estimate(self, indices):
+        return np.sum(self.theta[indices])
 
 
 class ACE:
@@ -81,9 +82,9 @@ class ACE:
     def grad_log_pi(self, x_t, a_t):
         self.psi_s_a.fill(0.)
         self.psi_s_a[a_t] = x_t
-        probs = self.pi(x_t).reshape(self.num_actions, 1) # reshape to enable broadcasting.
+        pi = np.expand_dims(self.pi(x_t), axis=1)  # Add dimension to enable broadcasting.
         self.psi_s_b[:] = x_t
-        return self.psi_s_a - probs * self.psi_s_b
+        return self.psi_s_a - pi * self.psi_s_b
 
     def learn(self, gamma_t, i_t, eta_t, alpha_t, rho_t, delta_t, x_t, a_t):
         self.F = self.rho_tm1 * gamma_t * self.F + i_t
