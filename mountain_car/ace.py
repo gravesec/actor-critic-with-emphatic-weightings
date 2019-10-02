@@ -1,13 +1,15 @@
 import numpy as np
-from .tiles3 import tiles
+from mountain_car.tiles3 import tiles
 
 
 # TODO: Implement action-value estimates instead of using TD error (which is higher variance due to the sampling of next states)
-# TODO: Consider using Q-estimation instead of TD error (which has higher variance due to sampling next states)
 # TODO: derive eligibility traces for actor?
 
 
 class TileCoder:
+    """
+    Linear function approximator.
+    """
 
     def __init__(self, min_values, max_values, num_tiles, num_tilings, num_features, bias_unit=False):
         self.num_tiles = np.array(num_tiles)
@@ -29,9 +31,9 @@ class TileCoder:
 
 
 class TOETD:
-    '''
+    """
     True Online Emphatic Temporal Difference learning algorithm written by Ashique Rupam Mahmood.
-    '''
+    """
 
     def __init__(self, n, I, alpha):
         self.ep = np.zeros(n)
@@ -70,11 +72,11 @@ class ACE:
         self.psi_s_b = np.zeros((num_actions, num_features))
 
     def pi(self, x_t):
-        prefs = self.theta.dot(x_t)
+        logits = self.theta.dot(x_t)
         # Converts potential overflows of the largest probability into underflows of the lowest probability:
-        prefs = prefs - prefs.max()
-        exp_prefs = np.exp(prefs)
-        return exp_prefs / np.sum(exp_prefs)
+        logits = logits - logits.max()
+        exp_logits = np.exp(logits)
+        return exp_logits / np.sum(exp_logits)
 
     def grad_log_pi(self, x_t, a_t):
         self.psi_s_a.fill(0.)
