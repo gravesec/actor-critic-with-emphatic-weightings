@@ -3,8 +3,8 @@
 __pycache__
 ve
 output
-data
-experiment*
+*.npy
+*.args
 .ipynb_checkpoints
 *.aux
 *.log
