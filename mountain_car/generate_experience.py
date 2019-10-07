@@ -15,7 +15,7 @@ max_state_values = [0.6, 0.07]
 transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int, 1), ('r_tp1', float, 1), ('s_tp1', float, (2,)), ('terminal', bool, 1)])
 
 
-def generate_experience(experience, policy, run_num, num_timesteps, random_seed):
+def generate_experience(experience, behaviour_policy, run_num, num_timesteps, random_seed):
     
     # Initialize the environment:
     env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
@@ -25,7 +25,7 @@ def generate_experience(experience, policy, run_num, num_timesteps, random_seed)
     rng = env.np_random
 
     # Create the behaviour policy:
-    mu = eval(policy)
+    mu = eval(behaviour_policy)
     
     # Generate the required timesteps of experience:
     transitions = np.empty(num_timesteps, dtype=transition_dtype)
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=3139378768, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
-    parser.add_argument('--policy', type=str, default='lambda s: np.array([1/3, 1/3, 1/3])', help='Policy to use. Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
+    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([1/3, 1/3, 1/3])', help='Policy to use. Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--backend', type=str, default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads). Always use \'loky\' because Python threading is terrible.')
     args = parser.parse_args()
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     # Generate the experience in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
-        delayed(generate_experience)(experience, args.policy, run_num, args.num_timesteps, random_seed) for run_num, random_seed in
+        delayed(generate_experience)(experience, args.behaviour_policy, run_num, args.num_timesteps, random_seed) for run_num, random_seed in
         enumerate(random_seeds))
 
     # Close the memmap file:
