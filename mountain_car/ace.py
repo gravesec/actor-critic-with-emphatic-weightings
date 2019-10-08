@@ -32,7 +32,7 @@ class TileCoder:
 
 class TOETD:
     """
-    True Online Emphatic Temporal Difference learning algorithm written by Ashique Rupam Mahmood.
+    True Online Emphatic Temporal Difference learning algorithm based on code by Ashique Rupam Mahmood.
     """
 
     def __init__(self, n, I, alpha):
@@ -45,11 +45,15 @@ class TOETD:
         self.prevgm = 0
         self.prevlm = 0
 
-    def learn(self, phi, phiPrime, R, rho, gm, lm, I, alpha):
-        delta = R + gm * np.dot(self.theta, phiPrime) - np.dot(self.theta, phi)
+    def learn(self, delta, indices_t, rho, gm, lm, I, alpha):
+        ep_dot_phi = self.ep[indices_t].sum()
+        self.ep *= rho * self.prevgm * self.prevlm  # Decay eligibility trace.
+        self.ep[indices_t] += rho * self.M * (1 - rho * self.prevgm * self.prevlm * ep_dot_phi)  # Add to eligibility trace.
 
-        self.ep = rho * (self.prevgm * self.prevlm * self.ep + self.M * (1 - rho * self.prevgm * self.prevlm * np.dot(self.ep, phi)) * phi)
-        Delta = delta * self.ep + np.dot(self.theta - self.prevtheta, phi) * (self.ep - rho * self.M * phi)
+        diff_dot_phi = (self.theta - self.prevtheta)[indices_t].sum()
+        Delta = (delta + diff_dot_phi) * self.ep
+        Delta[indices_t] -= diff_dot_phi * rho * self.M
+
         self.prevtheta = self.theta.copy()
         self.theta += Delta
         self.H = rho * gm * (self.H + self.prevI)
@@ -59,7 +63,7 @@ class TOETD:
         self.prevI = I
 
     def estimate(self, indices):
-        return np.sum(self.theta[indices])
+        return self.theta[indices].sum()
 
 
 class ACE:
@@ -68,28 +72,25 @@ class ACE:
         self.theta = np.zeros((num_actions, num_features))
         self.F = 0.
         self.rho_tm1 = 1.
-
         self.psi_s_a = np.zeros((num_actions, num_features))
         self.psi_s_b = np.zeros((num_actions, num_features))
 
-    def pi(self, x_t):
-        logits = self.theta.dot(x_t)
+    def pi(self, indices):
+        logits = self.theta[:, indices].sum(axis=1)
         # Converts potential overflows of the largest probability into underflows of the lowest probability:
         logits = logits - logits.max()
         exp_logits = np.exp(logits)
         return exp_logits / np.sum(exp_logits)
 
-    def grad_log_pi(self, x_t, a_t):
+    def grad_log_pi(self, indices, a_t):
         self.psi_s_a.fill(0.)
-        self.psi_s_a[a_t] = x_t
-        pi = np.expand_dims(self.pi(x_t), axis=1)  # Add dimension to enable broadcasting.
-        self.psi_s_b[:] = x_t
+        self.psi_s_a[a_t, indices] = 1.
+        pi = np.expand_dims(self.pi(indices), axis=1)  # Add dimension to enable broadcasting.
+        self.psi_s_b[:, indices] = 1.
         return self.psi_s_a - pi * self.psi_s_b
 
-    def learn(self, gamma_t, i_t, eta_t, alpha_t, rho_t, delta_t, x_t, a_t):
+    def learn(self, gamma_t, i_t, eta_t, alpha_t, rho_t, delta_t, indices_t, a_t):
         self.F = self.rho_tm1 * gamma_t * self.F + i_t
         M_t = (1 - eta_t) * i_t + eta_t * self.F
-
-        self.theta += alpha_t * rho_t * M_t * delta_t * self.grad_log_pi(x_t, a_t)
-
+        self.theta += alpha_t * rho_t * M_t * delta_t * self.grad_log_pi(indices_t, a_t)
         self.rho_tm1 = rho_t
