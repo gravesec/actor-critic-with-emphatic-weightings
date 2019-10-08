@@ -79,8 +79,8 @@ if __name__ == '__main__':
         for key, value in vars(args).items():
             args_file.write('--{}\n{}\n'.format(key, value))
 
-    # Create the memmapped array of experience to be populated in parallel:
-    experience = np.memmap(experiment_path / 'experience.npy', shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
+    # Create the memmapped structured array of experience to be populated in parallel:
+    experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
