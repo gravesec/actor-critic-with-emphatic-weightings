@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
 from mountain_car.ace import TileCoder, TOETD, ACE
-from mountain_car.generate_experience import num_actions, min_state_values, max_state_values, transition_dtype
+from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
 
 
 # TODO: Use structured arrays or record arrays to include parameter values in the policies memmap instead of having to pass them to evaluate_policies.py.
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     policies = np.memmap(experiment_path / 'policies.npy', shape=policies_shape, mode='w+')
 
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
-    experience = np.memmap(experiment_path / 'experience.npy', shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r')
+    experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
 
     # Run ACE for each set of parameters in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10)(
