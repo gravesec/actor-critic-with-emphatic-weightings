@@ -12,7 +12,6 @@ from joblib import Parallel, delayed
 num_actions = 3
 min_state_values = [-1.2, -0.07]
 max_state_values = [0.6, 0.07]
-transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int, 1), ('r_tp1', float, 1), ('s_tp1', float, (2,)), ('terminal', bool, 1)])
 
 
 def generate_experience(experience, behaviour_policy, run_num, num_timesteps, random_seed):
@@ -28,7 +27,6 @@ def generate_experience(experience, behaviour_policy, run_num, num_timesteps, ra
     mu = eval(behaviour_policy)
     
     # Generate the required timesteps of experience:
-    transitions = np.empty(num_timesteps, dtype=transition_dtype)
     s_t = env.reset()
     for t in range(num_timesteps):
 
@@ -44,13 +42,13 @@ def generate_experience(experience, behaviour_policy, run_num, num_timesteps, ra
             s_tp1 = env.reset()
 
         # Add the transition:
-        transitions[t] = (s_t, a_t, r_tp1, s_tp1, terminal)
+        experience[run_num, t] = (s_t, a_t, r_tp1, s_tp1, terminal)
 
         # Update temporary variables:
         s_t = s_tp1
 
     # Write the generated transitions to file:
-    experience[run_num] = transitions
+    # experience.flush()
 
 
 if __name__ == '__main__':
@@ -80,6 +78,7 @@ if __name__ == '__main__':
             args_file.write('--{}\n{}\n'.format(key, value))
 
     # Create the memmapped structured array of experience to be populated in parallel:
+    transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int, 1), ('r_tp1', float, 1), ('s_tp1', float, (2,)), ('terminal', bool, 1)])
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
