@@ -12,7 +12,7 @@ from mountain_car.generate_experience import num_actions, min_state_values, max_
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
 
 
-def run_ace(policies, experience, behaviour_policy, num_timesteps, checkpoint_interval, num_features, interest_function, run_num, config_num, parameters):
+def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_features, interest_function, run_num, config_num, parameters):
     gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
 
     # Create the interest function to use:
@@ -35,7 +35,7 @@ def run_ace(policies, experience, behaviour_policy, num_timesteps, checkpoint_in
 
         # Save the learned policy if it's a checkpoint timestep:
         if t % checkpoint_interval == 0:
-            policies[run_num, config_num, t // checkpoint_interval] = np.copy(actor.theta)
+            policies[run_num, config_num, t // checkpoint_interval] = (gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t, np.copy(actor.theta))
 
         s_t, a_t, r_tp1, s_tp1, terminal = transition
 
@@ -66,7 +66,7 @@ def run_ace(policies, experience, behaviour_policy, num_timesteps, checkpoint_in
         critic.learn(tc.features(indices_t), delta_t, rho_t, gamma_t, lambda_c, i_t, alpha_c / tc.num_active_features)
 
     # Save the policy after the final timestep:
-    policies[run_num, config_num, (t // checkpoint_interval)+1] = np.copy(actor.theta)
+    policies[run_num, config_num, -1] = (gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t+1, np.copy(actor.theta))
 
 
 if __name__ == '__main__':
@@ -96,11 +96,23 @@ if __name__ == '__main__':
             else:
                 args_file.write('--{}\n{}\n'.format(key, value))
 
-    # Create the memmapped array of learned policies to be populated in parallel:
-    num_policies = int(args.num_timesteps // args.checkpoint_interval) + 1
-    num_configurations = len(args.parameters)
-    policies_shape = (args.num_runs, num_configurations, num_policies, num_actions, args.num_features)
-    policies = np.memmap(experiment_path / 'policies.npy', shape=policies_shape, mode='w+')
+    # Create the memmapped array of learned policies that will be populated in parallel:
+    num_policies = args.num_timesteps // args.checkpoint_interval + 1
+    policies_dtype = np.dtype(
+        [
+            ('gamma', float),
+            ('alpha_a', float),
+            ('alpha_c', float),
+            ('lambda_c', float),
+            ('eta', float),
+            ('num_tiles', int),
+            ('num_tilings', int),
+            ('bias_unit', bool),
+            ('timesteps', int),
+            ('weights', float, (num_actions, args.num_features))
+        ]
+    )
+    policies = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(args.num_runs, len(args.parameters), num_policies), dtype=policies_dtype, mode='w+')
 
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
@@ -108,7 +120,7 @@ if __name__ == '__main__':
     # Run ACE for each set of parameters in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10)(
         delayed(run_ace)(
-            policies, experience, args.behaviour_policy, args.num_timesteps, args.checkpoint_interval, args.num_features, args.interest_function, run_num, config_num, parameters
+            policies, experience, args.behaviour_policy, args.checkpoint_interval, args.num_features, args.interest_function, run_num, config_num, parameters
         )
         for config_num, parameters in enumerate(args.parameters)
         for run_num in range(args.num_runs)
