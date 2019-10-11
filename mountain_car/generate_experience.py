@@ -83,8 +83,11 @@ if __name__ == '__main__':
 
     # Generate the experience in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
-        delayed(generate_experience)(experience, args.behaviour_policy, run_num, args.num_timesteps, random_seed) for run_num, random_seed in
-        enumerate(random_seeds))
+        delayed(generate_experience)(
+            experience, args.behaviour_policy, run_num, args.num_timesteps, random_seed
+        )
+        for run_num, random_seed in enumerate(random_seeds)
+    )
 
     # Close the memmap file:
     del experience

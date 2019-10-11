@@ -120,7 +120,9 @@ if __name__ == '__main__':
     # Run ACE for each set of parameters in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10)(
         delayed(run_ace)(
-            policies, experience, args.behaviour_policy, args.checkpoint_interval, args.num_features, args.interest_function, run_num, config_num, parameters
+            policies, experience,
+            args.behaviour_policy, args.checkpoint_interval, args.num_features, args.interest_function,
+            run_num, config_num, parameters
         )
         for config_num, parameters in enumerate(args.parameters)
         for run_num in range(args.num_runs)
