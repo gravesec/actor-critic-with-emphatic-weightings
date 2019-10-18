@@ -24,7 +24,7 @@ def generate_experience(experience, behaviour_policy, run_num, num_timesteps, ra
     rng = env.np_random
 
     # Create the behaviour policy:
-    mu = eval(behaviour_policy)
+    mu = eval(behaviour_policy, {'np': np})  # Give the eval'd function access to numpy.
     
     # Generate the required timesteps of experience:
     s_t = env.reset()
