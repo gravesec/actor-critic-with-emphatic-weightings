@@ -74,8 +74,6 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings) in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience.')
-    parser.add_argument('--num_timesteps', type=int, default=10000, help='The number of timesteps of experience per run.')
     parser.add_argument('--checkpoint_interval', type=int, default=10, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
@@ -96,8 +94,12 @@ if __name__ == '__main__':
             else:
                 args_file.write('--{}\n{}\n'.format(key, value))
 
+    # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
+    experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
+    num_runs, num_timesteps = experience.shape
+
     # Create the memmapped array of learned policies that will be populated in parallel:
-    num_policies = args.num_timesteps // args.checkpoint_interval + 1
+    num_policies = num_timesteps // args.checkpoint_interval + 1
     policies_dtype = np.dtype(
         [
             ('gamma', float),
@@ -112,10 +114,7 @@ if __name__ == '__main__':
             ('weights', float, (num_actions, args.num_features))
         ]
     )
-    policies = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(args.num_runs, len(args.parameters), num_policies), dtype=policies_dtype, mode='w+')
-
-    # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
-    experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
+    policies = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(num_runs, len(args.parameters), num_policies), dtype=policies_dtype, mode='w+')
 
     # Run ACE for each set of parameters in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10)(
