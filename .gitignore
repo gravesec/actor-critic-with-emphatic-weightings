@@ -3,6 +3,8 @@
 __pycache__
 ve
 output
+*.npy
+*.args
 .ipynb_checkpoints
 *.aux
 *.log
@@ -14,3 +16,4 @@ output
 *.fls
 *.pdf
 *~
+*.egg-info/
