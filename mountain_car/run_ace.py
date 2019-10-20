@@ -7,7 +7,6 @@ from mountain_car.ace import TileCoder, TOETD, ACE
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
 
 
-# TODO: Use structured arrays or record arrays to include parameter values in the policies memmap instead of having to pass them to evaluate_policies.py.
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
 
@@ -19,12 +18,12 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
     i = eval(interest_function)
 
     # Create the behaviour policy to query action probabilities from:
-    mu = eval(behaviour_policy)
+    mu = eval(behaviour_policy, {'np': np})  # Give the eval'd function access to numpy.
 
     # Create the agent:
     tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
     actor = ACE(num_actions, num_features)
-    critic = TOETD(num_features, 1, alpha_c / tc.num_active_features)
+    critic = TOETD(num_features, 1, alpha_c)
 
     # Get the run of experience to learn from:
     transitions = experience[run_num]
@@ -60,10 +59,10 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
         delta_t = r_tp1 + gamma_t * v_tp1 - v_t
 
         # Update actor:
-        actor.learn(gamma_t, i_t, eta, alpha_a / tc.num_active_features, rho_t, delta_t, indices_t, a_t)
+        actor.learn(gamma_t, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
 
         # Update critic:
-        critic.learn(tc.features(indices_t), delta_t, rho_t, gamma_t, lambda_c, i_t, alpha_c / tc.num_active_features)
+        critic.learn(tc.features(indices_t), delta_t, rho_t, gamma_t, lambda_c, i_t, alpha_c)
 
     # Save the policy after the final timestep:
     policies[run_num, config_num, -1] = (gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t+1, np.copy(actor.theta))
@@ -74,7 +73,7 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings) in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--checkpoint_interval', type=int, default=10, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--checkpoint_interval', type=int, default=100, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--interest_function', type=str, default='lambda s: 1.', help='Interest function to use. Example: \'lambda s: 1. if s==(-.5,.0) else 0.\' (episodic interest function)')
@@ -124,7 +123,7 @@ if __name__ == '__main__':
             run_num, config_num, parameters
         )
         for config_num, parameters in enumerate(args.parameters)
-        for run_num in range(args.num_runs)
+        for run_num in range(num_runs)
     )
 
     # Close the memmap files:
