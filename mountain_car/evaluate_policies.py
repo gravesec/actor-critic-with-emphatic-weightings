@@ -5,14 +5,16 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
+from mountain_car.ace import TileCoder, ACE
 
 # TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
+
 num_actions = 3
 min_state_values = [-1.2, -0.07]
 max_state_values = [0.6, 0.07]
 
 
-def evaluate_policy(performance, policies, max_timesteps, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
+def evaluate_policy(performance, policies, max_timesteps, objective, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
 
     # Initialize the environment:
     env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
@@ -21,35 +23,46 @@ def evaluate_policy(performance, policies, max_timesteps, evaluation_run_num, ac
     env.seed(random_seed)
     rng = env.np_random
 
+    # Load the policy to evaluate:
+    gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t, policy = policies[ace_run_num, config_num, policy_num]
+    agent = ACE(num_actions, policy.shape[1])
+    agent.theta = policy
+
+    tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), policy.shape[1], int(bias_unit))
+
+    # Set up the environment:
+    if objective == 'episodic':
+        # Use the mountain_car start state:
+        s_t = env.reset()
+    elif objective == 'excursions':
+        # Sample a state from the behaviour policy's state distribution:
+        # TODO: sample a state from the generated_experience.npy file?
+        raise NotImplementedError
+    else:
+        raise NotImplementedError
+
     # Evaluate the policy:
-    policy = policies[ace_run_num, config_num, policy_num]
-    G_t = 0.
-    s_t = env.reset()
+    g_t = 0.
     for t in range(max_timesteps):
 
-
-        # TODO: write the rest.
-
+        # Get feature vector for the current state:
+        indices_t = tc.indices(s_t)
 
         # Select an action:
-        mu_t = mu(s_t)
-        a_t = rng.choice(env.action_space.n, p=mu_t)
+        a_t = rng.choice(env.action_space.n, p=agent.pi(indices_t))
 
         # Take action a_t, observe next state s_tp1 and reward r_tp1:
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
 
-        # The agent is reset to a starting state after a terminal transition:
+        # Add reward:
+        g_t += r_tp1
+
+        # If done, break the loop:
         if terminal:
-            s_tp1 = env.reset()
+            break
 
-        # Add the transition:
-        transitions[t] = (s_t, a_t, r_tp1, s_tp1, terminal)
-
-        # Update temporary variables:
-        s_t = s_tp1
-
-    # Write the generated transitions to file:
-    experience[run_num] = transitions
+    # Write the total rewards received to file:
+    performance[evaluation_run_num, ace_run_num, config_num, policy_num] = g_t
 
 
 if __name__ == '__main__':
@@ -62,7 +75,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
-    parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='excursions', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: mountain car start state.)')
+    parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: mountain car start state.)')
     args = parser.parse_args()
 
     # Generate the random seed for each run without replacement:
@@ -88,13 +101,13 @@ if __name__ == '__main__':
     # Evaluate the learned policies in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
         delayed(evaluate_policy)(
-            performance, policies, args.max_timesteps,
+            performance, policies, args.max_timesteps, args.objective,
             evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
         )
         for evaluation_run_num, random_seed in enumerate(random_seeds)
-        for ace_run_num in num_ace_runs
-        for config_num in num_configurations
-        for policy_num in num_policies
+        for ace_run_num in range(num_ace_runs)
+        for config_num in range(num_configurations)
+        for policy_num in range(num_policies)
     )
 
     # Close the memmap file:
