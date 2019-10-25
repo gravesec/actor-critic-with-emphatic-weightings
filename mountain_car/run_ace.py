@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
 from mountain_car.ace import TileCoder, TOETD, ACE
+from mountain_car.GTD import GTD
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
 
 
@@ -23,7 +24,7 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
     # Create the agent:
     tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
     actor = ACE(num_actions, num_features)
-    critic = TOETD(num_features, 1, alpha_c)
+    critic = GTD(num_features, alpha_c, lambda_c)
 
     # Get the run of experience to learn from:
     transitions = experience[run_num]
@@ -39,7 +40,7 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
         s_t, a_t, r_tp1, s_tp1, terminal = transition
 
         # Transition-dependent discounting:
-        gamma_t = gamma if not terminal else 0
+        gamma_tp1 = gamma if not terminal else 0
 
         # Get feature vectors for each state:
         indices_t = tc.indices(s_t) if indices_tp1 is None else indices_tp1
@@ -56,13 +57,13 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
         # Compute TD error:
         v_t = critic.estimate(indices_t)
         v_tp1 = critic.estimate(indices_tp1)
-        delta_t = r_tp1 + gamma_t * v_tp1 - v_t
+        delta_t = r_tp1 + gamma_tp1 * v_tp1 - v_t
 
         # Update actor:
-        actor.learn(gamma_t, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
+        actor.learn(gamma_tp1, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
 
         # Update critic:
-        critic.learn(tc.features(indices_t), delta_t, rho_t, gamma_t, lambda_c, i_t, alpha_c)
+        critic.learn(delta_t, indices_t, gamma, indices_tp1, gamma_tp1, rho_t)
 
     # Save the policy after the final timestep:
     policies[run_num, config_num, -1] = (gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t+1, np.copy(actor.theta))
