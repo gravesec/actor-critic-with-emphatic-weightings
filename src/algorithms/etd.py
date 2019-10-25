@@ -1,6 +1,7 @@
 import numpy as np
 
-class ETD:
+
+class LinearETD:
 
     def __init__(self, num_features, alpha, lamda):
         self.num_features = num_features
@@ -9,8 +10,8 @@ class ETD:
         self.lamda = lamda
 
         self.i = 1. # Fixed interest
-        self.e = np.zeros((self.num_features))
-        self.v = np.zeros((self.num_features))
+        self.e = np.zeros(self.num_features)
+        self.v = np.zeros(self.num_features)
         self.F = 0.
         self.rho_tm1 = 1.
 

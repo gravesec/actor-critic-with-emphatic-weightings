@@ -1,5 +1,5 @@
 import numpy as np
-from src.algorithms.gtd import GTD
+from src.algorithms.tdc import LinearTDC
 from src.policy_types.deterministic_policy import DeterministicPolicy
 
 
@@ -12,7 +12,7 @@ class DPG:
         assert use_extra_weights == False # TODO: Add this later
         self.use_extra_weights = use_extra_weights
         if self.use_extra_weights:
-            self.w_tilde = GTD(num_features, alpha_v, alpha_w, 0.)
+            self.w_tilde = LinearTDC(num_features, alpha_v, alpha_w, 0.)
 
     def learn(self, x_t, gamma_t, a_t, r_tp1, x_tp1, gamma_tp1, rho_t, v_t=None, v_tp1=None, grad_t=None, M=None):
         # Compute temporal difference error:
