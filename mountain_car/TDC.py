@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class GTD:
+class TDC:
 
     def __init__(self, num_features, alpha_c, lambda_c):
         self.alpha_c = alpha_c
@@ -24,5 +24,4 @@ class GTD:
 
 
 if __name__ == '__main__':
-    # Test GTD:
-    pass
+    # Tests:
