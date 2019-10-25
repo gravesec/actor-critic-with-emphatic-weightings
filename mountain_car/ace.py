@@ -19,7 +19,10 @@ class TileCoder:
         self.num_active_features = self.num_tilings + self.bias_unit
 
     def indices(self, observations):
-        return np.array(tiles(int(self.num_features - self.bias_unit), self.num_tilings, list(np.array(observations) * self.scale_factor)), dtype=np.intp)
+        indices = tiles(int(self.num_features - self.bias_unit), self.num_tilings, list(np.array(observations) * self.scale_factor))
+        if self.bias_unit:
+            indices.append(self.num_features - 1)  # Add bias unit.
+        return np.array(indices, dtype=np.intp)
 
     def features(self, indices):
         features = np.zeros(self.num_features)
