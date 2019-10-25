@@ -5,7 +5,8 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
-from mountain_car.ace import TileCoder, ACE
+from src.algorithms.ace import ACE
+from src.function_approximation.tile_coder import TileCoder
 
 # TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
 
