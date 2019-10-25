@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
 from mountain_car.ace import TileCoder, TOETD, ACE
-from mountain_car.TDC import TDC
+from mountain_car.tdc import TDC
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
 
 
