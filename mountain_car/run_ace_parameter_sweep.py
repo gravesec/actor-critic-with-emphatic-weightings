@@ -2,6 +2,8 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
+
+from src import utils
 from src.algorithms.ace import ACE
 from src.algorithms.toetd import BinaryTOETD
 from src.function_approximation.tile_coder import TileCoder
@@ -35,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_interval', type=int, default=10, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\').')
-    parser.add_argument('--gamma', '--discount_rate', type=float, default=[1.], help='Discount rate.')
+    parser.add_argument('--gamma', '--discount_rate', type=float, default=1., help='Discount rate.')
     parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', help='Step sizes for the actor.')
     parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', help='Step sizes for the critic.')
     parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', help='Trace decay rates for the critic.')
@@ -49,11 +51,7 @@ if __name__ == '__main__':
 
     # Save the command line arguments in a format interpretable by argparse:
     experiment_path = Path(args.experiment_name)
-    with open(experiment_path / Path(parser.prog).with_suffix('.args'), 'w') as args_file:
-        for key, value in vars(args).items():
-            if isinstance(value, list):  # Special case for list arguments.
-                value = '\n'.join(str(i) for i in value)
-            args_file.write('--{}\n{}\n'.format(key, value))
+    utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')

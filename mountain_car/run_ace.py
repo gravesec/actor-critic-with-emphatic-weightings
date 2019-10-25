@@ -3,6 +3,8 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
+
+from src import utils
 from src.algorithms.ace import ACE
 from src.algorithms.toetd import BinaryTOETD
 from src.algorithms.tdc import BinaryTDC
@@ -87,14 +89,7 @@ if __name__ == '__main__':
 
     # Save the command line arguments in a format interpretable by argparse:
     experiment_path = Path(args.experiment_name)
-    os.makedirs(experiment_path, exist_ok=True)
-    with open(experiment_path / Path(parser.prog).with_suffix('.args'), 'w') as args_file:
-        for key, value in vars(args).items():
-            if isinstance(value, list):  # Special case for parameters argument.
-                for plist in value:
-                    args_file.write('--{}\n{}\n'.format(key, '\n'.join(str(i) for i in plist)))
-            else:
-                args_file.write('--{}\n{}\n'.format(key, value))
+    utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')

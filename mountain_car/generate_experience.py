@@ -3,6 +3,7 @@ import gym
 import random
 import argparse
 import numpy as np
+from src import utils
 from pathlib import Path
 from joblib import Parallel, delayed
 
@@ -68,14 +69,10 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
     random_seeds = random.sample(range(2**32), args.num_runs)
 
-    # Create the output directory:
+    # Save the command line arguments in a format interpretable by argparse:
     experiment_path = Path(args.experiment_name)
     os.makedirs(experiment_path, exist_ok=True)
-
-    # Save the command line arguments in a format interpretable by argparse:
-    with open(experiment_path / Path(parser.prog).with_suffix('.args'), 'w') as args_file:
-        for key, value in vars(args).items():
-            args_file.write('--{}\n{}\n'.format(key, value))
+    utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Create the memmapped structured array of experience to be populated in parallel:
     transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int, 1), ('r_tp1', float, 1), ('s_tp1', float, (2,)), ('terminal', bool, 1)])

@@ -5,6 +5,8 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
+
+from src import utils
 from src.algorithms.ace import ACE
 from src.function_approximation.tile_coder import TileCoder
 
@@ -120,9 +122,7 @@ if __name__ == '__main__':
     os.makedirs(experiment_path, exist_ok=True)
 
     # Save the command line arguments in a format interpretable by argparse:
-    with open(experiment_path / Path(parser.prog).with_suffix('.args'), 'w') as args_file:
-        for key, value in vars(args).items():
-            args_file.write('--{}\n{}\n'.format(key, value))
+    utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Load the learned policies to evaluate:
     policies = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), mode='r')
