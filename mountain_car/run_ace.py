@@ -24,7 +24,7 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
     # Create the agent:
     tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
     actor = ACE(num_actions, num_features)
-    critic = TDC(num_features, alpha_c, lambda_c)
+    critic = TDC(num_features, alpha_c, alpha_c/10., lambda_c)
 
     # Get the run of experience to learn from:
     transitions = experience[run_num]
