@@ -50,6 +50,7 @@ class ACE:
         self.psi_s_a.fill(0.)
         self.psi_s_a[a_t, indices] = 1.
         pi = np.expand_dims(self.pi(indices), axis=1)  # Add dimension to enable broadcasting.
+        self.psi_s_b.fill(0.)
         self.psi_s_b[:, indices] = 1.
         return self.psi_s_a - pi * self.psi_s_b
 
