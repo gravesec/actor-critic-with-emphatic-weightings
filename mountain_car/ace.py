@@ -27,8 +27,6 @@ class TileCoder:
     def features(self, indices):
         features = np.zeros(self.num_features)
         features[indices] = 1.
-        if self.bias_unit:
-            features[self.num_features - 1] = 1.
         return features
 
 
