@@ -9,7 +9,7 @@ from joblib import Parallel, delayed
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
-# TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
+# TODO: Consider implementing our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
 num_actions = 3
 min_state_values = [-1.2, -0.07]
 max_state_values = [0.6, 0.07]
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to generate experience from a uniform random policy on the Mountain Car environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
-    parser.add_argument('--num_timesteps', type=int, default=10000, help='The number of timesteps of experience to generate per run')
+    parser.add_argument('--num_timesteps', type=int, default=5000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=3139378768, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')

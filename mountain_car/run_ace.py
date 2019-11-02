@@ -28,13 +28,14 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
     # Create the agent:
     tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
     actor = ACE(num_actions, num_features)
-    critic = BinaryTDC(num_features, alpha_c, alpha_c / 10., lambda_c)
+    critic = BinaryTDC(num_features, alpha_c, alpha_c / 100., lambda_c)
 
     # Get the run of experience to learn from:
     transitions = experience[run_num]
 
     # Learn from the experience:
     indices_tp1 = None  # Store features to prevent re-generating them.
+    gamma_t = 0.
     for t, transition in enumerate(transitions):
 
         # Save the learned policy if it's a checkpoint timestep:
@@ -51,7 +52,7 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
         indices_tp1 = tc.indices(s_tp1)
 
         # Get interest for the current state:
-        i_t = i(t)
+        i_t = i(s_t, gamma_t)
 
         # Compute importance sampling ratio for the policies:
         pi_t = actor.pi(indices_t)
@@ -67,7 +68,9 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
         actor.learn(gamma_tp1, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
 
         # Update critic:
-        critic.learn(delta_t, indices_t, gamma, indices_tp1, gamma_tp1, rho_t)
+        critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+
+        gamma_t = gamma_tp1
 
     # Save the policy after the final timestep:
     policies[run_num, config_num, -1] = (gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t+1, np.copy(actor.theta))
@@ -81,9 +84,9 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_interval', type=int, default=100, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
-    parser.add_argument('--interest_function', type=str, default='lambda s: 1.', help='Interest function to use. Example: \'lambda s: 1. if s==(-.5,.0) else 0.\' (episodic interest function)')
+    parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1. if g==0. else 0.', help='Interest function to use. Example: \'lambda s, g=1: 1.\' (uniform interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([1/3, 1/3, 1/3])', help='Policy used to generate data. Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
-    parser.add_argument('--num_features', type=int, default=512, help='The number of features to use in the tile coder.')
+    parser.add_argument('--num_features', type=int, default=100000, help='The number of features to use in the tile coder.')
     parser.add_argument('--parameters', type=float, nargs=8, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once.')
     args = parser.parse_args()
 
