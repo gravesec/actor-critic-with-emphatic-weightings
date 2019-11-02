@@ -18,6 +18,7 @@ class Collision:
     mu[:int(num_states/2)] = np.array([1., 0.])
     rho = np.full((num_states, num_actions), 1.)
     rho[:int(num_states/2)] = np.array([2., 0.])
+    true_state_values = np.array([.4782969, .531441, .59049, .6561, .729, .81, .9, 1.])
 
     # Generate all possible feature vectors to sample from:
     num_possible_feature_vectors = int(comb(num_features, num_active_features))
@@ -31,14 +32,13 @@ class Collision:
 
     @staticmethod
     def sample(state, action):
+        reward = 0
         if action == Collision.Action.right:
-            reward = 0
             next_state = state + 1
             if next_state == Collision.num_states:
                 next_state = None
-                r = 1
+                reward = 1
         elif action == Collision.Action.retreat:
-            reward = 0
             next_state = None
         else:
             raise ValueError('Invalid action {}'.format(action))

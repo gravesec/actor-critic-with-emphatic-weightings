@@ -32,7 +32,7 @@ class LinearTOETD:
 
 class BinaryTOETD:
     """
-    Adapted from TOETD by Ashique Rupam Mahmood.
+    Adapted from Ashique Rupam Mahmood's TOETD.
     """
     def __init__(self, num_features, I, alpha):
         self.ep = np.zeros(num_features)
