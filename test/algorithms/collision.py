@@ -22,8 +22,10 @@ class Collision:
 
     # Generate all possible feature vectors to sample from:
     num_possible_feature_vectors = int(comb(num_features, num_active_features))
+    possible_indices_vectors = np.zeros((num_possible_feature_vectors, num_active_features), dtype=np.intp)
     possible_feature_vectors = np.zeros((num_possible_feature_vectors, num_features))
     for i, indices in enumerate(combinations(range(num_features), num_active_features)):
+        possible_indices_vectors[i] = indices
         possible_feature_vectors[i, indices] = 1
 
     @staticmethod
@@ -49,3 +51,8 @@ class Collision:
         # Return a subset of the possible feature vectors:
         indices = np.random.choice(Collision.num_possible_feature_vectors, Collision.num_states, replace=False)
         return Collision.possible_feature_vectors[indices]
+
+    @staticmethod
+    def indices():
+        indices = np.random.choice(Collision.num_possible_feature_vectors, Collision.num_states, replace=False)
+        return Collision.possible_indices_vectors[indices]
