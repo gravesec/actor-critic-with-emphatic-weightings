@@ -1,4 +1,3 @@
-import os
 import gym
 import random
 import argparse
@@ -71,7 +70,6 @@ if __name__ == '__main__':
 
     # Save the command line arguments in a format interpretable by argparse:
     experiment_path = Path(args.experiment_name)
-    os.makedirs(experiment_path, exist_ok=True)
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Create the memmapped structured array of experience to be populated in parallel:

@@ -1,4 +1,3 @@
-import os
 import argparse
 import numpy as np
 from pathlib import Path
@@ -6,7 +5,6 @@ from joblib import Parallel, delayed
 
 from src import utils
 from src.algorithms.ace import ACE
-from src.algorithms.toetd import BinaryTOETD
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
