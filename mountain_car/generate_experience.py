@@ -47,9 +47,6 @@ def generate_experience(experience, behaviour_policy, run_num, num_timesteps, ra
         # Update temporary variables:
         s_t = s_tp1
 
-    # Write the generated transitions to file:
-    # experience.flush()
-
 
 if __name__ == '__main__':
 
