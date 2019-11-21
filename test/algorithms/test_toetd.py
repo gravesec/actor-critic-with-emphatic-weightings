@@ -2,9 +2,8 @@ import unittest
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-from joblib import Parallel, delayed
 from src.algorithms.toetd import LinearTOETD, BinaryTOETD
-from test.algorithms.collision import Collision
+from src.misc_envs.collision import Collision
 
 
 class TOETDTests(unittest.TestCase):
@@ -12,7 +11,7 @@ class TOETDTests(unittest.TestCase):
     def test_linear_toetd(self):
         env = Collision
         np.random.seed(1730740995)
-        num_timesteps = 10000
+        num_timesteps = 1000
         num_runs = 50
 
         state_visit_counts = np.zeros((num_runs, Collision.num_states))
@@ -53,7 +52,7 @@ class TOETDTests(unittest.TestCase):
     def test_binary_toetd(self):
         env = Collision
         np.random.seed(1730740995)
-        num_timesteps = 10000
+        num_timesteps = 1000
         num_runs = 50
 
         state_visit_counts = np.zeros((num_runs, Collision.num_states))

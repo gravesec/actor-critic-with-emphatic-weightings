@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from src.algorithms.tdc import LinearTDC, BinaryTDC
-from test.algorithms.bairds_counterexample import BairdsCounterexample
+from src.misc_envs.bairds_counterexample import BairdsCounterexample
+from src.misc_envs.collision import Collision
 
 
 class TDCTests(unittest.TestCase):
@@ -48,6 +49,49 @@ class TDCTests(unittest.TestCase):
         plt.ylabel('MSPBE')
         plt.savefig('linear_tdc_bairds_counterexample.png')
         self.assertLess(mspbe[-1], .1)
+
+    def test_binary_tdc(self):
+        env = Collision
+        np.random.seed(1730740995)
+        num_timesteps = 1000
+        num_runs = 50
+
+        state_visit_counts = np.zeros((num_runs, Collision.num_states))
+        estimated_state_values = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
+        for run_num in tqdm(range(num_runs)):
+            agent = BinaryTDC(env.num_features, .01, .001, 0.9)
+            indices = env.indices()
+            s_t = env.init()
+            indices_t = indices[s_t]
+            gamma_t = 0.
+            for t in range(num_timesteps):
+                a_t = np.random.choice(env.actions, p=env.mu[s_t])
+                r_tp1, s_tp1 = env.sample(s_t, a_t)
+                if s_tp1 is None:
+                    gamma_tp1 = 0.
+                    s_tp1 = env.init()
+                else:
+                    gamma_tp1 = env.gamma
+                state_visit_counts[run_num, s_tp1] += 1
+                indices_tp1 = indices[s_tp1]
+                rho_t = env.rho[s_t, a_t]
+                delta_t = r_tp1 + gamma_tp1 * agent.estimate(indices_tp1) - agent.estimate(indices_t)
+                agent.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+                indices_t = indices_tp1
+                s_t = s_tp1
+                gamma_t = gamma_tp1
+
+                for state in range(Collision.num_states):
+                    estimated_state_values[run_num, t, state] = agent.estimate(indices[state])
+
+        d_mu = np.mean(state_visit_counts / num_timesteps, axis=0)
+        msve = np.mean(np.sum(d_mu * np.square(estimated_state_values - Collision.true_state_values), axis=2), axis=0)
+        plt.plot(msve, label='MSVE')
+        plt.title('Binary TDC on the Collision problem')
+        plt.xlabel('Timesteps')
+        plt.ylabel('MSVE')
+        plt.savefig('binary_tdc_collision.png')
+        self.assertLess(msve[-1], 0.4)
 
 
 if __name__ == '__main__':
