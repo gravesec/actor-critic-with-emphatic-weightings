@@ -17,19 +17,15 @@ max_state_values = [0.6, 0.07]
 
 
 # This function is not used anywhere; I've been calling it from the Python console while debugging scripts.
-def evaluate(policy):
-    weights = policy['weights']
+def evaluate(tile_coder, actor):
     env = gym.make('MountainCar-v0').env
-    actor = ACE(weights.shape[0], weights.shape[1])
-    actor.theta = weights
-    tc = TileCoder(min_state_values, max_state_values, [int(policy['num_tiles']), int(policy['num_tiles'])], int(policy['num_tilings']), weights.shape[1], int(policy['bias_unit']))
 
     g_t = 0.
     s_t = env.reset()
     for t in range(1000):
 
         # Get feature vector for the current state:
-        indices_t = tc.indices(s_t)
+        indices_t = tile_coder.indices(s_t)
 
         # Select an action:
         a_t = np.random.choice(env.action_space.n, p=actor.pi(indices_t))
