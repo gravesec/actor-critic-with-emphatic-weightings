@@ -49,7 +49,7 @@ def plot_learned_policy(tile_coder, actor, num_samples_per_dimension=100):
     plt.show()
 
 
-def evaluate_policy(tile_coder, actor, num_timesteps=5000):
+def evaluate_policy(tile_coder, actor, num_timesteps=1000):
     env = gym.make('MountainCar-v0').env
 
     g_t = 0.

@@ -8,6 +8,7 @@ from src.algorithms.ace import ACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
+from mountain_car.visualize import plot_learned_policy, plot_learned_value_function, evaluate_policy
 
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
