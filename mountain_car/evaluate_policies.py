@@ -16,34 +16,6 @@ min_state_values = [-1.2, -0.07]
 max_state_values = [0.6, 0.07]
 
 
-# This function is not used anywhere; I've been calling it from the Python console while debugging scripts.
-def evaluate(tile_coder, actor):
-    env = gym.make('MountainCar-v0').env
-
-    g_t = 0.
-    s_t = env.reset()
-    for t in range(1000):
-
-        # Get feature vector for the current state:
-        indices_t = tile_coder.indices(s_t)
-
-        # Select an action:
-        a_t = np.random.choice(env.action_space.n, p=actor.pi(indices_t))
-
-        # Take action a_t, observe next state s_tp1 and reward r_tp1:
-        s_tp1, r_tp1, terminal, _ = env.step(a_t)
-
-        # Add reward:
-        g_t += r_tp1
-
-        env.render()
-
-        # If done, break the loop:
-        if terminal:
-            break
-    return g_t
-
-
 def evaluate_policy(performance, policies, max_timesteps, objective, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
 
     # Initialize the environment:

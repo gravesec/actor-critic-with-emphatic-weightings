@@ -1,3 +1,4 @@
+import gym
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -18,8 +19,7 @@ def plot_learned_value_function(tile_coder, critic, num_samples_per_dimension=10
             value_estimates[p, v] = critic.estimate(indices)
 
     pos, vel = np.meshgrid(positions, velocities)
-    # surface = ax.plot_wireframe(pos, vel, value_estimates, rcount=15, ccount=15)
-    surface = ax.plot_surface(pos, vel, value_estimates, cmap='hot')
+    ax.plot_surface(pos, vel, value_estimates, cmap='hot')
     plt.title('Learned value function on the Mountain Car environment')
     plt.xlabel('Position')
     plt.ylabel('Velocity')
@@ -41,9 +41,37 @@ def plot_learned_policy(tile_coder, actor, num_samples_per_dimension=100):
             learned_policy[p, v] = actor.pi(indices)
 
     pos, vel = np.meshgrid(positions, velocities)
-    surface = ax.plot_surface(pos, vel, learned_policy[:,:,2], cmap='hot')
-    plt.title('Learned policy on the Mountain Car environment')
+    ax.plot_surface(pos, vel, learned_policy[:, :, 2], cmap='hot')
+    plt.title('Probability of action 2 in learned policy on the Mountain Car environment')
     plt.xlabel('Position')
     plt.ylabel('Velocity')
     plt.savefig('learned_policy.png')
     plt.show()
+
+
+def evaluate_policy(tile_coder, actor, num_timesteps=5000):
+    env = gym.make('MountainCar-v0').env
+
+    g_t = 0.
+    s_t = env.reset()
+    for t in range(num_timesteps):
+
+        # Get feature vector for the current state:
+        indices_t = tile_coder.indices(s_t)
+
+        # Select an action:
+        pi = actor.pi(indices_t)
+        a_t = np.random.choice(pi.shape[0], p=pi)
+
+        # Take action a_t, observe next state s_tp1 and reward r_tp1:
+        s_tp1, r_tp1, terminal, _ = env.step(a_t)
+
+        # Add reward:
+        g_t += r_tp1
+
+        env.render()
+
+        # If done, break the loop:
+        if terminal:
+            break
+    return g_t
