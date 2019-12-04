@@ -74,29 +74,16 @@ def plot_visits(transitions):
     plt.show()
 
 
-def evaluate_policy(tile_coder, actor, num_timesteps=1000):
+def evaluate_policy(tc, actor, num_timesteps=1000):
     env = gym.make('MountainCar-v0').env
-
     g_t = 0.
-    s_t = env.reset()
+    indices_t = tc.indices(env.reset())
     for t in range(num_timesteps):
-
-        # Get feature vector for the current state:
-        indices_t = tile_coder.indices(s_t)
-
-        # Select an action:
-        pi = actor.pi(indices_t)
-        a_t = np.random.choice(pi.shape[0], p=pi)
-
-        # Take action a_t, observe next state s_tp1 and reward r_tp1:
+        a_t = np.random.choice(env.action_space.n, p=actor.pi(indices_t))
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
-
-        # Add reward:
+        indices_t = tc.indices(s_tp1)
         g_t += r_tp1
-
-        env.render()
-
-        # If done, break the loop:
         if terminal:
             break
+        env.render()
     return g_t

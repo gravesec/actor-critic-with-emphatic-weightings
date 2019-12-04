@@ -4,19 +4,15 @@ from pathlib import Path
 from joblib import Parallel, delayed
 
 from src import utils
-from src.algorithms.ace import ACE
+from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
-from mountain_car.visualize import plot_learned_policy, plot_learned_value_function, evaluate_policy
 
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
 # TODO?: Refactor memmap layout to be optimal.
-# TODO?: Refactor run_ace into two functions:
-#  1. a function to run ace without side effects or knowledge of the layout of the results memmap (run_ace)
-#  2. a function to call run_ace and store returned results in the memmap
 
 
 def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_features, interest_function, run_num, config_num, parameters):
@@ -30,7 +26,7 @@ def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_fea
 
     # Create the agent:
     tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
-    actor = ACE(num_actions, num_features)
+    actor = BinaryACE(num_actions, num_features)
     critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
 
     # Get the run of experience to learn from:
