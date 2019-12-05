@@ -107,7 +107,7 @@ if __name__ == '__main__':
     policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(num_runs, num_configurations), dtype=configuration_dtype, mode='w+')
 
     # Run ACE for each set of parameters in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=100)(
+    Parallel(n_jobs=args.num_cpus, verbose=10)(
         delayed(run_ace)(
             policies_memmap, experience_memmap,
             run_num, config_num, parameters
