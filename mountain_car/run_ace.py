@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
 
@@ -12,67 +13,50 @@ from mountain_car.generate_experience import num_actions, min_state_values, max_
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
-# TODO?: Refactor memmap layout to be optimal.
 
 
-def run_ace(policies, experience, behaviour_policy, checkpoint_interval, num_features, interest_function, run_num, config_num, parameters):
+def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters):
     gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
 
-    # Create the interest function to use:
-    i = eval(interest_function)
-
-    # Create the behaviour policy to query action probabilities from:
-    mu = eval(behaviour_policy, {'np': np})  # Give the eval'd function access to numpy.
-
-    # Create the agent:
+    i = eval(args.interest_function)  # Create the interest function to use.
+    mu = eval(args.behaviour_policy, {'np': np})  # Create the behaviour policy and give it access to numpy.
     tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
-    actor = BinaryACE(num_actions, num_features)
-    critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
+    actor = BinaryACE(num_actions, args.num_features)
+    critic = BinaryTDC(args.num_features, alpha_c, alpha_w, lambda_c)
 
-    # Get the run of experience to learn from:
-    transitions = experience[run_num]
+    policies = np.zeros(num_policies, dtype=policy_dtype)
 
-    # Learn from the experience:
-    indices_tp1 = None  # Store features to prevent re-generating them.
+    transitions = experience_memmap[run_num]  # Get the run of experience to learn from.
     gamma_t = 0.
-    for t, transition in enumerate(transitions):
+    indices_t = tc.indices(transitions[0][0])
+    for t, transition in tqdm(enumerate(transitions)):
+        if t % args.checkpoint_interval == 0:  # Save the learned policy if it's a checkpoint timestep:
+            policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
-        # Save the learned policy if it's a checkpoint timestep:
-        if t % checkpoint_interval == 0:
-            policies[run_num, config_num, t // checkpoint_interval] = (gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, bias_unit, t, np.copy(actor.theta))
-
+        # Unpack the stored transition.
         s_t, a_t, r_tp1, s_tp1, terminal = transition
-
-        # Transition-dependent discounting:
-        gamma_tp1 = gamma if not terminal else 0
-
-        # Get feature vectors for each state:
-        indices_t = tc.indices(s_t) if indices_tp1 is None else indices_tp1
+        gamma_tp1 = gamma if not terminal else 0  # Transition-dependent discounting.
         indices_tp1 = tc.indices(s_tp1)
-
-        # Get interest for the current state:
         i_t = i(s_t, gamma_t)
-
-        # Compute importance sampling ratio for the policies:
+        # Compute importance sampling ratio for the policies_memmap:
         pi_t = actor.pi(indices_t)
         mu_t = mu(s_t)
         rho_t = pi_t[a_t] / mu_t[a_t]
-
         # Compute TD error:
         v_t = critic.estimate(indices_t)
         v_tp1 = critic.estimate(indices_tp1)
         delta_t = r_tp1 + gamma_tp1 * v_tp1 - v_t
-
         # Update actor:
-        actor.learn(gamma_tp1, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
-
+        actor.learn(gamma_t, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
         # Update critic:
         critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
 
         gamma_t = gamma_tp1
+        indices_t = indices_tp1
 
     # Save the policy after the final timestep:
-    policies[run_num, config_num, -1] = (gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, bias_unit, t+1, np.copy(actor.theta))
+    policies[-1] = (t+1, np.copy(actor.theta))
+    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, bias_unit, policies)
 
 
 if __name__ == '__main__':
@@ -94,12 +78,19 @@ if __name__ == '__main__':
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
-    experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
-    num_runs, num_timesteps = experience.shape
+    experience_memmap = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
+    num_runs, num_timesteps = experience_memmap.shape
 
     # Create the memmapped array of learned policies that will be populated in parallel:
     num_policies = num_timesteps // args.checkpoint_interval + 1
-    policies_dtype = np.dtype(
+    num_configurations = len(args.parameters)
+    policy_dtype = np.dtype(
+        [
+            ('timestep', int),
+            ('weights', float, (num_actions, args.num_features))
+        ]
+    )
+    configuration_dtype = np.dtype(
         [
             ('gamma', float),
             ('alpha_a', float),
@@ -110,17 +101,15 @@ if __name__ == '__main__':
             ('num_tiles', int),
             ('num_tilings', int),
             ('bias_unit', bool),
-            ('timesteps', int),
-            ('weights', float, (num_actions, args.num_features))
+            ('policies', policy_dtype, num_policies)
         ]
     )
-    policies = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(num_runs, len(args.parameters), num_policies), dtype=policies_dtype, mode='w+')
+    policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(num_runs, num_configurations), dtype=configuration_dtype, mode='w+')
 
     # Run ACE for each set of parameters in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=10)(
+    Parallel(n_jobs=args.num_cpus, verbose=100)(
         delayed(run_ace)(
-            policies, experience,
-            args.behaviour_policy, args.checkpoint_interval, args.num_features, args.interest_function,
+            policies_memmap, experience_memmap,
             run_num, config_num, parameters
         )
         for config_num, parameters in enumerate(args.parameters)
@@ -128,5 +117,5 @@ if __name__ == '__main__':
     )
 
     # Close the memmap files:
-    del experience
-    del policies
+    del experience_memmap
+    del policies_memmap
