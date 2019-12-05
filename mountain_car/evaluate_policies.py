@@ -6,37 +6,38 @@ from pathlib import Path
 from joblib import Parallel, delayed
 
 from src import utils
-from src.algorithms.ace import ACE
+from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
+from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
+
 
 # TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
 
-num_actions = 3
-min_state_values = [-1.2, -0.07]
-max_state_values = [0.6, 0.07]
 
-
-def evaluate_policy(performance, policies, max_timesteps, objective, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
-
-    # Initialize the environment:
+def evaluate_policy(performance_memmap, policies_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
     env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
-
-    # Configure random state for the run:
     env.seed(random_seed)
     rng = env.np_random
 
     # Load the policy to evaluate:
-    gamma, alpha_a, alpha_c, lambda_c, eta, num_tiles, num_tilings, bias_unit, t, policy = policies[ace_run_num, config_num, policy_num]
-    agent = ACE(num_actions, policy.shape[1])
-    agent.theta = policy
+    configuration = policies_memmap[ace_run_num, config_num]
+    policies = configuration['policies']
+    policy = policies[policy_num]
+    weights = policy['weights']
+    agent = BinaryACE(weights[0], weights[1])
+    agent.theta = weights
 
-    tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), policy.shape[1], int(bias_unit))
+    # Configure the tile coder:
+    num_tiles = configuration['num_tiles']
+    num_tilings = configuration['num_tilings']
+    bias_unit = configuration['bias_unit']
+    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, policy.shape[1], bias_unit)
 
     # Set up the environment:
-    if objective == 'episodic':
+    if args.objective == 'episodic':
         # Use the mountain_car start state:
         s_t = env.reset()
-    elif objective == 'excursions':
+    elif args.objective == 'excursions':
         # Sample a state from the behaviour policy's state distribution:
         # TODO: sample a state from the generated_experience.npy file?
         raise NotImplementedError
@@ -45,7 +46,7 @@ def evaluate_policy(performance, policies, max_timesteps, objective, evaluation_
 
     # Evaluate the policy:
     g_t = 0.
-    for t in range(max_timesteps):
+    for t in range(args.max_timesteps):
 
         # Get feature vector for the current state:
         indices_t = tc.indices(s_t)
@@ -64,7 +65,7 @@ def evaluate_policy(performance, policies, max_timesteps, objective, evaluation_
             break
 
     # Write the total rewards received to file:
-    performance[evaluation_run_num, ace_run_num, config_num, policy_num] = g_t
+    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = g_t
 
 
 if __name__ == '__main__':
@@ -84,23 +85,21 @@ if __name__ == '__main__':
     random.seed(args.random_seed)
     random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
 
-    # Create the output directory:
-    experiment_path = Path(args.experiment_name)
-
     # Save the command line arguments in a format interpretable by argparse:
+    experiment_path = Path(args.experiment_name)
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Load the learned policies to evaluate:
-    policies = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), mode='r')
-    num_ace_runs, num_configurations, num_policies = policies.shape
+    policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), mode='r')
+    num_ace_runs, num_configurations, num_policies = policies_memmap['policies'].shape
 
     # Create the memmapped array of results to be populated in parallel:
-    performance = np.lib.format.open_memmap(str(experiment_path / '{}_performance.npy'.format(args.objective)), shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
+    performance_memmap = np.lib.format.open_memmap(str(experiment_path / '{}_performance.npy'.format(args.objective)), shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
     # Evaluate the learned policies in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
         delayed(evaluate_policy)(
-            performance, policies, args.max_timesteps, args.objective,
+            performance_memmap, policies_memmap,
             evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
         )
         for evaluation_run_num, random_seed in enumerate(random_seeds)
@@ -110,5 +109,5 @@ if __name__ == '__main__':
     )
 
     # Close the memmap file:
-    del policies
-    del performance
+    del policies_memmap
+    del performance_memmap
