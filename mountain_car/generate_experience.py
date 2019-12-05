@@ -14,7 +14,7 @@ min_state_values = np.array([-1.2, -0.07])
 max_state_values = np.array([0.6, 0.07])
 
 
-def generate_experience(experience, behaviour_policy, run_num, num_timesteps, random_seed):
+def generate_experience(experience, run_num, random_seed):
     
     # Initialize the environment:
     env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
@@ -24,11 +24,11 @@ def generate_experience(experience, behaviour_policy, run_num, num_timesteps, ra
     rng = env.np_random
 
     # Create the behaviour policy:
-    mu = eval(behaviour_policy, {'np': np})  # Give the eval'd function access to numpy.
+    mu = eval(args.behaviour_policy, {'np': np})  # Give the eval'd function access to numpy.
     
     # Generate the required timesteps of experience:
     s_t = env.reset()
-    for t in range(num_timesteps):
+    for t in range(args.num_timesteps):
 
         # Select an action:
         mu_t = mu(s_t)
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     # Generate the experience in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
         delayed(generate_experience)(
-            experience, args.behaviour_policy, run_num, args.num_timesteps, random_seed
+            experience, run_num, random_seed
         )
         for run_num, random_seed in enumerate(random_seeds)
     )
