@@ -16,29 +16,34 @@ from mountain_car.generate_experience import num_actions, min_state_values, max_
 
 
 def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters):
-    gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
+    gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit = parameters
+    num_tiles = int(num_tiles)
+    num_tilings = int(num_tilings)
+    num_features = int(num_features)
+    bias_unit = int(bias_unit)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np})  # Create the behaviour policy and give it access to numpy.
-    tc = TileCoder(min_state_values, max_state_values, [int(num_tiles), int(num_tiles)], int(num_tilings), num_features, int(bias_unit))
-    actor = BinaryACE(num_actions, args.num_features)
-    critic = BinaryTDC(args.num_features, alpha_c, alpha_w, lambda_c)
+    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, num_features, bias_unit)
+    actor = BinaryACE(num_actions, num_features)
+    critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
 
     policies = np.zeros(num_policies, dtype=policy_dtype)
-
     transitions = experience_memmap[run_num]  # Get the run of experience to learn from.
     gamma_t = 0.
     indices_t = tc.indices(transitions[0][0])
     for t, transition in tqdm(enumerate(transitions)):
         if t % args.checkpoint_interval == 0:  # Save the learned policy if it's a checkpoint timestep:
-            policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
+            padded_weights = np.zeros_like(policies[t // args.checkpoint_interval][1])
+            padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
+            policies[t // args.checkpoint_interval] = (t, padded_weights)
 
         # Unpack the stored transition.
         s_t, a_t, r_tp1, s_tp1, terminal = transition
         gamma_tp1 = gamma if not terminal else 0  # Transition-dependent discounting.
         indices_tp1 = tc.indices(s_tp1)
         i_t = i(s_t, gamma_t)
-        # Compute importance sampling ratio for the policies_memmap:
+        # Compute importance sampling ratio for the policy:
         pi_t = actor.pi(indices_t)
         mu_t = mu(s_t)
         rho_t = pi_t[a_t] / mu_t[a_t]
@@ -55,8 +60,10 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         indices_t = indices_tp1
 
     # Save the policy after the final timestep:
-    policies[-1] = (t+1, np.copy(actor.theta))
-    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, bias_unit, policies)
+    padded_weights = np.zeros_like(policies[-1][1])
+    padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
+    policies[-1] = (t+1, padded_weights)
+    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit, policies)
 
 
 if __name__ == '__main__':
@@ -69,8 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1. if g==0. else 0.', help='Interest function to use. Example: \'lambda s, g=1: 1.\' (uniform interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([1/3, 1/3, 1/3])', help='Policy used to generate data. Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
-    parser.add_argument('--num_features', type=int, default=100000, help='The number of features to use in the tile coder.')
-    parser.add_argument('--parameters', type=float, nargs=9, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_STEP_SIZE_2', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once.')
+    parser.add_argument('--parameters', type=float, nargs=10, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_STEP_SIZE_2', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'NUM_FEATURES', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once.')
     args = parser.parse_args()
 
     # Save the command line arguments in a format interpretable by argparse:
@@ -83,11 +89,11 @@ if __name__ == '__main__':
 
     # Create the memmapped array of learned policies that will be populated in parallel:
     num_policies = num_timesteps // args.checkpoint_interval + 1
-    num_configurations = len(args.parameters)
+    max_num_features = int(max(parameters[8] for parameters in args.parameters))
     policy_dtype = np.dtype(
         [
             ('timestep', int),
-            ('weights', float, (num_actions, args.num_features))
+            ('weights', float, (num_actions, max_num_features))
         ]
     )
     configuration_dtype = np.dtype(
@@ -100,10 +106,12 @@ if __name__ == '__main__':
             ('eta', float),
             ('num_tiles', int),
             ('num_tilings', int),
+            ('num_features', int),
             ('bias_unit', bool),
             ('policies', policy_dtype, num_policies)
         ]
     )
+    num_configurations = len(args.parameters)
     policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(num_runs, num_configurations), dtype=configuration_dtype, mode='w+')
 
     # Run ACE for each set of parameters in parallel:
