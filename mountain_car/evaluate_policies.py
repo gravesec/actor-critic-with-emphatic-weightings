@@ -15,54 +15,45 @@ from mountain_car.generate_experience import num_actions, min_state_values, max_
 
 
 def evaluate_policy(performance_memmap, policies_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
-    env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
-    env.seed(random_seed)
-    rng = env.np_random
-
     # Load the policy to evaluate:
     configuration = policies_memmap[ace_run_num, config_num]
-    policies = configuration['policies']
-    policy = policies[policy_num]
-    weights = policy['weights']
-    agent = BinaryACE(weights[0], weights[1])
+    num_features = configuration['num_features']
+    policy = configuration['policies'][policy_num]
+    weights = policy['weights'][:, :num_features]  # trim potential padding.
+    agent = BinaryACE(weights.shape[0], weights.shape[1])
     agent.theta = weights
 
     # Configure the tile coder:
     num_tiles = configuration['num_tiles']
     num_tilings = configuration['num_tilings']
     bias_unit = configuration['bias_unit']
-    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, policy.shape[1], bias_unit)
+    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, num_features, bias_unit)
 
     # Set up the environment:
+    env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
+    env.seed(random_seed)
+    rng = env.np_random
     if args.objective == 'episodic':
         # Use the mountain_car start state:
         s_t = env.reset()
     elif args.objective == 'excursions':
         # Sample a state from the behaviour policy's state distribution:
-        # TODO: sample a state from the generated_experience.npy file?
+        # TODO: sample a state from the generated_experience.npy file? Or generate new experience?
         raise NotImplementedError
     else:
         raise NotImplementedError
 
     # Evaluate the policy:
     g_t = 0.
+    indices_t = tc.indices(s_t)
     for t in range(args.max_timesteps):
-
-        # Get feature vector for the current state:
-        indices_t = tc.indices(s_t)
-
-        # Select an action:
         a_t = rng.choice(env.action_space.n, p=agent.pi(indices_t))
-
-        # Take action a_t, observe next state s_tp1 and reward r_tp1:
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
-
-        # Add reward:
+        indices_t = tc.indices(s_tp1)
         g_t += r_tp1
-
-        # If done, break the loop:
         if terminal:
             break
+        # env.render()
 
     # Write the total rewards received to file:
     performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = g_t
@@ -93,6 +84,7 @@ if __name__ == '__main__':
     policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), mode='r')
     num_ace_runs, num_configurations, num_policies = policies_memmap['policies'].shape
 
+    # TODO: change this to include configuration information!
     # Create the memmapped array of results to be populated in parallel:
     performance_memmap = np.lib.format.open_memmap(str(experiment_path / '{}_performance.npy'.format(args.objective)), shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
