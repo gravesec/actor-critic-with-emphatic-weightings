@@ -70,7 +70,7 @@ if __name__ == '__main__':
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Create the memmapped structured array of experience to be populated in parallel:
-    transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int, 1), ('r_tp1', float, 1), ('s_tp1', float, (2,)), ('terminal', bool, 1)])
+    transition_dtype = np.dtype([('s_t', float, (2,)), ('a_t', int), ('r_tp1', float), ('s_tp1', float, (2,)), ('terminal', bool)])
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
