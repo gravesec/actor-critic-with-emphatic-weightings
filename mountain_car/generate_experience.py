@@ -53,8 +53,8 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to generate experience from a uniform random policy on the Mountain Car environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
-    parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
+    parser.add_argument('--num_runs', type=int, default=30, help='The number of independent runs of experience to generate')
+    parser.add_argument('--num_timesteps', type=int, default=200000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=3139378768, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
