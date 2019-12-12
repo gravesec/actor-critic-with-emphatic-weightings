@@ -1,6 +1,5 @@
 import argparse
 import numpy as np
-from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
 
@@ -32,7 +31,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     transitions = experience_memmap[run_num]  # Get the run of experience to learn from.
     gamma_t = 0.
     indices_t = tc.indices(transitions[0][0])
-    for t, transition in tqdm(enumerate(transitions)):
+    for t, transition in enumerate(transitions):
         if t % args.checkpoint_interval == 0:  # Save the learned policy if it's a checkpoint timestep:
             padded_weights = np.zeros_like(policies[t // args.checkpoint_interval][1])
             padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
