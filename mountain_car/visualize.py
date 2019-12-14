@@ -73,17 +73,3 @@ def plot_visits(transitions):
     plt.savefig('state_visits.png')
     plt.show()
 
-
-def evaluate_policy(tc, actor, num_timesteps=1000):
-    env = gym.make('MountainCar-v0').env
-    g_t = 0.
-    indices_t = tc.indices(env.reset())
-    for t in range(num_timesteps):
-        a_t = np.random.choice(env.action_space.n, p=actor.pi(indices_t))
-        s_tp1, r_tp1, terminal, _ = env.step(a_t)
-        indices_t = tc.indices(s_tp1)
-        g_t += r_tp1
-        if terminal:
-            break
-        env.render()
-    return g_t

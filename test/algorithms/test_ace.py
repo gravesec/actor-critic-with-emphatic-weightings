@@ -2,17 +2,18 @@ import unittest
 import gym
 import numpy as np
 from tqdm import tqdm
-from src.algorithms.ace import ACE, BinaryACE
+from src.algorithms.ace import LinearACE, BinaryACE
 from src.algorithms.totd import LinearTOTD, BinaryTOTD
 from src.function_approximation.tile_coder import TileCoder
 from mountain_car.generate_experience import min_state_values, max_state_values
-from mountain_car.visualize import plot_learned_policy, plot_learned_value_function, evaluate_policy
+from mountain_car.visualize import plot_learned_policy, plot_learned_value_function
+from mountain_car.evaluate_policies import evaluate_policy
 
 
 class ACETests(unittest.TestCase):
 
     def test_learn_one(self):
-        ace = ACE(2, 3)
+        ace = BinaryACE(2, 3)
         indices_t = np.array([2], dtype=np.intp)
         a_t = 0
         delta_t = 1  # action was better than expected
@@ -23,7 +24,7 @@ class ACETests(unittest.TestCase):
         self.assertGreater(after[a_t], before[a_t])
 
     def test_learn_two(self):
-        ace = ACE(2, 3)
+        ace = BinaryACE(2, 3)
         indices_t = np.array([0, 1, 2], dtype=np.intp)
         a_t = 0
         delta_t = -1  # action was worse than expected
@@ -67,7 +68,8 @@ class ACETests(unittest.TestCase):
 
         plot_learned_policy(tc, actor)
         plot_learned_value_function(tc, critic)
-        g_t = evaluate_policy(tc, actor)
+        env.reset()
+        g_t = evaluate_policy(actor, tc, env)
         self.assertGreater(g_t, -250)
 
 

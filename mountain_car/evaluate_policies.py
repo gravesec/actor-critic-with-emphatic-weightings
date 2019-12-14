@@ -4,17 +4,30 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
-
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
 
-
 # TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
 
 
-def evaluate_policy(performance_memmap, policies_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
+def evaluate_policy(actor, tc, env, num_timesteps=1000, render=False):
+    g_t = 0.
+    indices_t = tc.indices(env.reset())
+    for t in range(num_timesteps):
+        a_t = np.random.choice(env.action_space.n, p=actor.pi(indices_t))
+        s_tp1, r_tp1, terminal, _ = env.step(a_t)
+        indices_t = tc.indices(s_tp1)
+        g_t += r_tp1
+        if terminal:
+            break
+        if render:
+            env.render()
+    return g_t
+
+
+def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
     # Load the policy to evaluate:
     configuration = policies_memmap[ace_run_num, config_num]
     num_features = configuration['num_features']
@@ -43,20 +56,8 @@ def evaluate_policy(performance_memmap, policies_memmap, evaluation_run_num, ace
     else:
         raise NotImplementedError
 
-    # Evaluate the policy:
-    g_t = 0.
-    indices_t = tc.indices(s_t)
-    for t in range(args.max_timesteps):
-        a_t = rng.choice(env.action_space.n, p=agent.pi(indices_t))
-        s_tp1, r_tp1, terminal, _ = env.step(a_t)
-        indices_t = tc.indices(s_tp1)
-        g_t += r_tp1
-        if terminal:
-            break
-        # env.render()
-
     # Write the total rewards received to file:
-    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = g_t
+    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(agent, tc, env)
 
 
 if __name__ == '__main__':
@@ -84,13 +85,12 @@ if __name__ == '__main__':
     policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), mode='r')
     num_ace_runs, num_configurations, num_policies = policies_memmap['policies'].shape
 
-    # TODO: change this to include configuration information!
     # Create the memmapped array of results to be populated in parallel:
     performance_memmap = np.lib.format.open_memmap(str(experiment_path / '{}_performance.npy'.format(args.objective)), shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
     # Evaluate the learned policies in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
-        delayed(evaluate_policy)(
+        delayed(evaluate_policies)(
             performance_memmap, policies_memmap,
             evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
         )
