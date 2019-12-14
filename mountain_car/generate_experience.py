@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([1/3, 1/3, 1/3])', help='Policy to use. Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     args = parser.parse_args()
 
-    # Generate the random seed for each run without replacement:
+    # Generate the random seed for each run without replacement to prevent the birthday problem:
     random.seed(args.random_seed)
     random_seeds = random.sample(range(2**32), args.num_runs)
 
