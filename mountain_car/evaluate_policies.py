@@ -5,10 +5,16 @@ import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
 
+import os,sys,inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0,parentdir)
+
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
 from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
+from mc_env import MountainCar
 
 
 # TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
@@ -30,7 +36,8 @@ def evaluate_policy(performance_memmap, policies_memmap, evaluation_run_num, ace
     tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, num_features, bias_unit)
 
     # Set up the environment:
-    env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
+    # env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
+    env = MountainCar()
     env.seed(random_seed)
     rng = env.np_random
     if args.objective == 'episodic':
@@ -47,7 +54,8 @@ def evaluate_policy(performance_memmap, policies_memmap, evaluation_run_num, ace
     g_t = 0.
     indices_t = tc.indices(s_t)
     for t in range(args.max_timesteps):
-        a_t = rng.choice(env.action_space.n, p=agent.pi(indices_t))
+        # a_t = rng.choice(env.action_space.n, p=agent.pi(indices_t))
+        a_t = rng.choice(env.num_action, p=agent.pi(indices_t))
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
         indices_t = tc.indices(s_tp1)
         g_t += r_tp1

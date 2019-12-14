@@ -2,9 +2,16 @@ import gym
 import random
 import argparse
 import numpy as np
+
+import os,sys,inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0,parentdir)
+
 from src import utils
 from pathlib import Path
 from joblib import Parallel, delayed
+from mc_env import MountainCar
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
@@ -15,9 +22,10 @@ max_state_values = np.array([0.6, 0.07])
 
 
 def generate_experience(experience, run_num, random_seed):
-    
+
     # Initialize the environment:
-    env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
+    # env = gym.make('MountainCar-v0').env  # Get the underlying environment object to bypass the built-in timestep limit.
+    env = MountainCar(normalized=False)  # Get the underlying environment object to bypass the built-in timestep limit.
 
     # Configure random state for the run:
     env.seed(random_seed)
@@ -25,14 +33,15 @@ def generate_experience(experience, run_num, random_seed):
 
     # Create the behaviour policy:
     mu = eval(args.behaviour_policy, {'np': np})  # Give the eval'd function access to numpy.
-    
+
     # Generate the required timesteps of experience:
     s_t = env.reset()
     for t in range(args.num_timesteps):
 
         # Select an action:
         mu_t = mu(s_t)
-        a_t = rng.choice(env.action_space.n, p=mu_t)
+        # a_t = rng.choice(env.action_space.n, p=mu_t)
+        a_t = rng.choice(env.num_action, p=mu_t)
 
         # Take action a_t, observe next state s_tp1 and reward r_tp1:
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
