@@ -12,7 +12,7 @@ from src.algorithms.eac import EAC
 from src.function_approximation.long_counterexample_features import LongCounterexampleFeatures
 from generate_data import num_actions, environment_name, behaviour_policy_name, behavior_probs
 
-from src.misc_envs.mdps import long_counterexample_env
+from src.environments.mdps import long_counterexample_env
 from src.algorithms.oracle_critic import OracleCritic
 from generate_data import behavior_probs, middle_steps
 

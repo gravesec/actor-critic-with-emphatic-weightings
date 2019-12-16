@@ -14,7 +14,7 @@ from src.policy_types.discrete_policy import DiscretePolicy
 from src.function_approximation.long_counterexample_features import LongCounterexampleFeatures
 
 from src.algorithms.oracle_critic import OracleCritic
-from src.misc_envs.mdps import long_counterexample_env
+from src.environments.mdps import long_counterexample_env
 from generate_data import behavior_probs, middle_steps
 
 import pickle

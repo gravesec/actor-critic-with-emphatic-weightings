@@ -15,7 +15,7 @@ from src.policy_types.deterministic_policy import DeterministicPolicy
 from src.function_approximation.tiny_counterexample_features import TinyCounterexampleFeatures
 
 from src.algorithms.oracle_critic_stoch_dpg_ce import OracleCriticStochDPGCE
-from src.misc_envs.dpg_ce_env import DPGCEEnv
+from src.environments.dpg_ce_env import DPGCEEnv
 from generate_data import behavior_params
 
 import pickle

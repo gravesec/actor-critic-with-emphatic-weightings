@@ -10,7 +10,7 @@ import numpy as np
 from src import utils
 from gym.utils import seeding
 
-from src.misc_envs.mdps import long_counterexample_env
+from src.environments.mdps import long_counterexample_env
 
 # Set up the experiment:
 environment_name = 'long_counterexample' # TODO: Figure out how to register these environments in gym.

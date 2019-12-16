@@ -16,7 +16,7 @@ from src.policy_types.discrete_policy import DiscretePolicy
 from src.function_approximation.tiny_counterexample_features import TinyCounterexampleFeatures
 
 from src.algorithms.oracle_critic import OracleCritic
-from src.misc_envs.mdps import tiny_counterexample_env
+from src.environments.mdps import tiny_counterexample_env
 from generate_data import behavior_probs
 
 import pickle

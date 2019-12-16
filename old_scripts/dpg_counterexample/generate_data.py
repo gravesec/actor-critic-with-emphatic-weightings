@@ -10,7 +10,7 @@ import numpy as np
 from src import utils
 from gym.utils import seeding
 
-from src.misc_envs.dpg_ce_env import DPGCEEnv
+from src.environments.dpg_ce_env import DPGCEEnv
 
 import numpy as np
 

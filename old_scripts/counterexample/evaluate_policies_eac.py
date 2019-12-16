@@ -13,7 +13,7 @@ from src.function_approximation.counterexample_features import CounterexampleFea
 from src.policy_types.discrete_policy import DiscretePolicy
 from generate_data import num_actions, environment_name, behaviour_policy_name, max_num_timesteps
 
-from src.misc_envs.mdps import counterexample_env
+from src.environments.mdps import counterexample_env
 
 if __name__ == '__main__':
 

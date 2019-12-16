@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from src.algorithms.tdc import LinearTDC, BinaryTDC
-from src.misc_envs.bairds_counterexample import BairdsCounterexample
-from src.misc_envs.collision import Collision
+from src.environments.bairds_counterexample import BairdsCounterexample
+from src.environments.collision import Collision
 
 
 class TDCTests(unittest.TestCase):

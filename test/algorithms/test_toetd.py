@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from src.algorithms.toetd import LinearTOETD, BinaryTOETD
-from src.misc_envs.collision import Collision
+from src.environments.collision import Collision
 
 
 class TOETDTests(unittest.TestCase):
