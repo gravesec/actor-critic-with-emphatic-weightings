@@ -3,13 +3,6 @@ import gym_puddle
 import random
 import argparse
 import numpy as np
-
-# import os,sys,inspect
-# currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.insert(0,parentdir)
-# from mc_env import MountainCar
-
 from src import utils
 from pathlib import Path
 from joblib import Parallel, delayed

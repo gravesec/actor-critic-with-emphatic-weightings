@@ -4,12 +4,6 @@ import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
-
-import os,sys,inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir)
-
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
