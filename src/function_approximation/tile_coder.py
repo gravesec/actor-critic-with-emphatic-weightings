@@ -1,11 +1,10 @@
 import numpy as np
 from src.function_approximation.tiles3 import tiles
 
-
+# TODO: implement a tileswrap version for acrobot?
 class TileCoder:
     def __init__(self, min_values, max_values, num_tiles, num_tilings, num_features, bias_unit=False):
-        self.num_tiles = np.array(num_tiles)
-        self.scale_factor = self.num_tiles / (np.array(max_values) - np.array(min_values))
+        self.scale_factor = num_tiles / (np.array(max_values) - np.array(min_values))
         self.num_tilings = num_tilings
         self.bias_unit = bias_unit
         self.num_features = num_features

@@ -1,18 +1,19 @@
+import gym
+import gym_puddle
 import argparse
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
 
-import os,sys,inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir)
+# import os,sys,inspect
+# currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+# parentdir = os.path.dirname(currentdir)
+# sys.path.insert(0,parentdir)
 
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
-from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
 
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
@@ -27,9 +28,10 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     bias_unit = int(bias_unit)
 
     i = eval(args.interest_function)  # Create the interest function to use.
-    mu = eval(args.behaviour_policy, {'np': np})  # Create the behaviour policy and give it access to numpy.
-    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, num_features, bias_unit)
-    actor = BinaryACE(num_actions, num_features)
+    mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
+
+    tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
+    actor = BinaryACE(env.action_space.n, num_features)
     critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
 
     policies = np.zeros(num_policies, dtype=policy_dtype)
@@ -79,8 +81,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
-    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([1/3, 1/3, 1/3])', help='Policy used to generate data. Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
-    parser.add_argument('--parameters', required=True, type=float, nargs=10, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_STEP_SIZE_2', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'NUM_FEATURES', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once. Example:\n--parameters .99 .1 .05 .0001 .0 .0 9 9 2048 1.')
+    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
+    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to run ACE on.')
+    parser.add_argument('--parameters', required=True, type=float, nargs=10, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_STEP_SIZE_2', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'NUM_FEATURES', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once. Example:\n--parameters .99 .1 .05 .0001 .0 .0 9 9 10000 1.')
     args = parser.parse_args()
 
     # Save the command line arguments in a format interpretable by argparse:
@@ -92,12 +95,13 @@ if __name__ == '__main__':
     num_runs, num_timesteps = experience_memmap.shape
 
     # Create the memmapped array of learned policies that will be populated in parallel:
+    env = gym.make(args.environment).env  # Make a dummy env to get shape info.
     num_policies = num_timesteps // args.checkpoint_interval + 1
     max_num_features = int(max(parameters[8] for parameters in args.parameters))
     policy_dtype = np.dtype(
         [
             ('timestep', int),
-            ('weights', float, (num_actions, max_num_features))
+            ('weights', float, (env.action_space.n, max_num_features))
         ]
     )
     configuration_dtype = np.dtype(
