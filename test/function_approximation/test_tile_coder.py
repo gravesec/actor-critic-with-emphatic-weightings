@@ -11,7 +11,7 @@ class TileCoderTests(unittest.TestCase):
         np.random.seed(2734287609)
         num_features = 1024
         weights = np.zeros(num_features)
-        tc = TileCoder(min_values=[0, 0], max_values=[2 * np.pi, 2 * np.pi], num_tiles=[8, 8], num_tilings=8, num_features=num_features, bias_unit=True)
+        tc = TileCoder([0, 0], [2 * np.pi, 2 * np.pi], 8, 8, num_features, True)
         step_size = .1/tc.num_active_features
 
         def target(x, y):

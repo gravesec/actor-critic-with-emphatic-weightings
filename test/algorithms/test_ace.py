@@ -5,9 +5,8 @@ from tqdm import tqdm
 from src.algorithms.ace import LinearACE, BinaryACE
 from src.algorithms.totd import LinearTOTD, BinaryTOTD
 from src.function_approximation.tile_coder import TileCoder
-from mountain_car.generate_experience import min_state_values, max_state_values
-from mountain_car.visualize import plot_learned_policy, plot_learned_value_function
-from mountain_car.evaluate_policies import evaluate_policy
+from visualize import plot_learned_policy, plot_learned_value_function
+from evaluate_policies import evaluate_policy
 
 
 class ACETests(unittest.TestCase):
@@ -40,7 +39,7 @@ class ACETests(unittest.TestCase):
         num_timesteps = 10000
         num_features = 4096
         gamma = 1.
-        tc = TileCoder(min_state_values, max_state_values, [8, 8], 8, num_features, True)
+        tc = TileCoder(env.observation_space.low, env.observation_space.high, 8, 8, num_features, True)
         actor = BinaryACE(env.action_space.n, num_features)
         critic = BinaryTOTD(num_features, .0625, 0.)
 
