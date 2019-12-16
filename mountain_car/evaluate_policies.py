@@ -13,17 +13,13 @@ sys.path.insert(0,parentdir)
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
-from mountain_car.generate_experience import num_actions, min_state_values, max_state_values
-from mc_env import MountainCar
-
-# TODO: implement our own mountain car environment (https://en.wikipedia.org/wiki/Mountain_car_problem) because openai's is slow, stateful, and has bizarre decisions built in like time limits and the inability to get properties of an environment without creating an instantiation of it.
 
 
-def evaluate_policy(actor, tc, env, num_timesteps=1000, render=False):
+def evaluate_policy(actor, tc, env, rng=np.random, num_timesteps=1000, render=False):
     g_t = 0.
     indices_t = tc.indices(env.reset())
     for t in range(num_timesteps):
-        a_t = np.random.choice(env.num_action, p=actor.pi(indices_t))
+        a_t = rng.choice(env.action_space.n, p=actor.pi(indices_t))
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
         indices_t = tc.indices(s_tp1)
         g_t += r_tp1
@@ -43,28 +39,25 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
     agent = BinaryACE(weights.shape[0], weights.shape[1])
     agent.theta = weights
 
+    # Set up the environment:
+    import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
+    env = gym.make(args.environment).env
+    env.seed(random_seed)
+    rng = env.np_random
+    if args.objective == 'episodic':
+        # Use the environment's start state:
+        s_t = env.reset()
+    else:
+        raise NotImplementedError
+
     # Configure the tile coder:
     num_tiles = configuration['num_tiles']
     num_tilings = configuration['num_tilings']
     bias_unit = configuration['bias_unit']
-    tc = TileCoder(min_state_values, max_state_values, [num_tiles, num_tiles], num_tilings, num_features, bias_unit)
-
-    # Set up the environment:
-    env = MountainCar()
-    env.seed(random_seed)
-    rng = env.np_random
-    if args.objective == 'episodic':
-        # Use the mountain_car start state:
-        s_t = env.reset()
-    elif args.objective == 'excursions':
-        # Sample a state from the behaviour policy's state distribution:
-        # TODO: sample a state from the generated_experience.npy file? Or generate new experience?
-        raise NotImplementedError
-    else:
-        raise NotImplementedError
+    tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
 
     # Write the total rewards received to file:
-    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(agent, tc, env)
+    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(agent, tc, env, rng)
 
 
 if __name__ == '__main__':
@@ -77,10 +70,11 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
-    parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: mountain car start state.)')
+    parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: environment start state.)')
+    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to generate experience from.')
     args = parser.parse_args()
 
-    # Generate the random seed for each run without replacement:
+    # Generate the random seed for each run without replacement to prevent the birthday problem:
     random.seed(args.random_seed)
     random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
 

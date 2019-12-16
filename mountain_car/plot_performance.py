@@ -29,4 +29,5 @@ if __name__ == '__main__':
     plt.title('Mountain car')
     plt.xlabel('Timesteps')
     plt.ylabel('Total Reward')
-    plt.savefig('performance')
+    plt.ylim(-1000, 0)
+    plt.savefig('{}_performance'.format(args.objective))
