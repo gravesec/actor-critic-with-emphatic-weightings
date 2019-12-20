@@ -55,5 +55,5 @@ class BinaryACE:
         M_t = (1 - eta_t) * i_t + eta_t * self.F
         pi = self.pi(indices_t)
         for a in range(self.theta.shape[0]):
-            self.theta[a, indices_t] += alpha_t * rho_t * M_t * delta_t * (1 if a == a_t else 0 - pi[a])
+            self.theta[a, indices_t] += alpha_t * rho_t * M_t * delta_t * (1 - pi[a] if a == a_t else 0 - pi[a])
         self.rho_tm1 = rho_t

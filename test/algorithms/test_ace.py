@@ -81,7 +81,7 @@ class ACETests(unittest.TestCase):
         num_evaluation_runs = 5
         rewards = np.zeros((num_timesteps // evaluation_interval + 1, num_evaluation_runs))
 
-        alpha_a = .001
+        alpha_a = .1
         alpha_c = .05
         alpha_w = .0001
         lambda_c = 0.
