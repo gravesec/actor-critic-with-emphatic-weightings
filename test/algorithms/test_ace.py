@@ -81,7 +81,7 @@ class ACETests(unittest.TestCase):
         num_evaluation_runs = 5
         rewards = np.zeros((num_timesteps // evaluation_interval + 1, num_evaluation_runs))
 
-        alpha_a = .1
+        alpha_a = .001
         alpha_c = .05
         alpha_w = .0001
         lambda_c = 0.
@@ -92,7 +92,9 @@ class ACETests(unittest.TestCase):
         rng = env.np_random
 
         num_features = 100000
-        tc = TileCoder(env.observation_space.low, env.observation_space.high, 9, 9, num_features, True)
+        num_tiles = 9
+        num_tilings = 9
+        tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, True)
         actor = BinaryACE(env.action_space.n, num_features)
         critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
 
