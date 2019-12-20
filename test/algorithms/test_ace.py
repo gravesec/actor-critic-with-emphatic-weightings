@@ -69,13 +69,13 @@ class ACETests(unittest.TestCase):
             indices_t = indices_tp1
             gamma_t = gamma_tp1
 
-        plot_learned_policy(actor, tc)
-        plot_learned_value_function(critic, tc)
+        # plot_learned_policy(actor, tc)
+        # plot_learned_value_function(critic, tc)
         env.reset()
         g_t = evaluate_policy(actor, tc, env)
         self.assertGreater(g_t, -250)
 
-    def test_binary_offpac(self):
+    def test_binary_ace_off_policy(self):
         num_timesteps = 50000
         evaluation_interval = 1000
         num_evaluation_runs = 5
@@ -85,6 +85,7 @@ class ACETests(unittest.TestCase):
         alpha_c = .05
         alpha_w = .0001
         lambda_c = 0.
+        eta = 0.
 
         env = gym.make('MountainCar-v0').env
         # env.seed(1202670738)
@@ -116,7 +117,7 @@ class ACETests(unittest.TestCase):
 
             delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
             critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
-            actor.learn(gamma_t, 1., 0., alpha_a, rho_t, delta_t, indices_t, a_t)
+            actor.learn(gamma_t, 1., eta, alpha_a, rho_t, delta_t, indices_t, a_t)
 
             gamma_t = gamma_tp1
             indices_t = indices_tp1
@@ -130,7 +131,7 @@ class ACETests(unittest.TestCase):
         ax = fig.add_subplot(111)
         x = np.array([evaluation_interval*i for i in range(num_timesteps // evaluation_interval + 1)])
         confs = sem_rewards * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
-        label = '$\\alpha_a$:{}, $\\alpha_c$:{}, $\\alpha_w$:{}, $\\lambda_c$:{}'.format(alpha_a, alpha_c, alpha_w, lambda_c)
+        label = '$\\alpha_a$:{}, $\\alpha_c$:{}, $\\alpha_w$:{}, $\\lambda_c$:{}, $\\eta$:{}'.format(alpha_a, alpha_c, alpha_w, lambda_c, eta)
         ax.errorbar(x, mean_rewards, yerr=[confs, confs], label=label)
         plt.legend(loc='lower right')
         plt.title('Mountain Car')
@@ -139,6 +140,8 @@ class ACETests(unittest.TestCase):
         plt.ylim(-5000, 0)
         plt.savefig('total_rewards.png')
         # plt.show()
+
+        self.assertGreater(mean_rewards[-1], -250)
 
 
 if __name__ == '__main__':
