@@ -9,7 +9,8 @@ from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
 
 
-def evaluate_policy(actor, tc, env, rng=np.random, num_timesteps=1000, render=False):
+def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
+    env = gym.make('MountainCar-v0').env if env is None else env
     g_t = 0.
     indices_t = tc.indices(env.reset())
     for t in range(num_timesteps):
@@ -30,8 +31,8 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
     num_features = configuration['num_features']
     policy = configuration['policies'][policy_num]
     weights = policy['weights'][:, :num_features]  # trim potential padding.
-    agent = BinaryACE(weights.shape[0], weights.shape[1])
-    agent.theta = weights
+    actor = BinaryACE(weights.shape[0], weights.shape[1])
+    actor.theta = weights
 
     # Set up the environment:
     import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
@@ -51,7 +52,7 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
     tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
 
     # Write the total rewards received to file:
-    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(agent, tc, env, rng)
+    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(actor, tc, env, rng)
 
 
 if __name__ == '__main__':

@@ -2,8 +2,12 @@ import unittest
 import gym
 import numpy as np
 from tqdm import tqdm
+import scipy.stats as st
+import matplotlib.pyplot as plt
+from joblib import Parallel, delayed
 from src.algorithms.ace import LinearACE, BinaryACE
 from src.algorithms.totd import LinearTOTD, BinaryTOTD
+from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
 from visualize import plot_learned_policy, plot_learned_value_function
 from evaluate_policies import evaluate_policy
@@ -65,11 +69,76 @@ class ACETests(unittest.TestCase):
             indices_t = indices_tp1
             gamma_t = gamma_tp1
 
-        plot_learned_policy(tc, actor)
-        plot_learned_value_function(tc, critic)
+        plot_learned_policy(actor, tc)
+        plot_learned_value_function(critic, tc)
         env.reset()
         g_t = evaluate_policy(actor, tc, env)
         self.assertGreater(g_t, -250)
+
+    def test_binary_offpac(self):
+        num_timesteps = 50000
+        evaluation_interval = 1000
+        num_evaluation_runs = 5
+        rewards = np.zeros((num_timesteps // evaluation_interval + 1, num_evaluation_runs))
+
+        alpha_a = .001
+        alpha_c = .05
+        alpha_w = .0001
+        lambda_c = 0.
+
+        env = gym.make('MountainCar-v0').env
+        # env.seed(1202670738)
+        rng = env.np_random
+
+        num_features = 100000
+        tc = TileCoder(env.observation_space.low, env.observation_space.high, 9, 9, num_features, True)
+        actor = BinaryACE(env.action_space.n, num_features)
+        critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
+
+        indices_t = tc.indices(env.reset())
+        gamma_t = 0.
+        for t in tqdm(range(num_timesteps)):
+            if t % evaluation_interval == 0:
+                rewards[t // evaluation_interval] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=5000) for _ in range(num_evaluation_runs))
+
+            a_t = rng.choice(env.action_space.n)
+            s_tp1, r_tp1, terminal, _ = env.step(a_t)
+            if terminal:
+                s_tp1 = env.reset()
+                gamma_tp1 = 0.
+            else:
+                gamma_tp1 = 1.
+            indices_tp1 = tc.indices(s_tp1)
+
+            pi_t = actor.pi(indices_t)
+            mu_t = np.ones(env.action_space.n) / env.action_space.n
+            rho_t = pi_t[a_t] / mu_t[a_t]
+
+            delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
+            critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+            actor.learn(gamma_t, 1., 0., alpha_a, rho_t, delta_t, indices_t, a_t)
+
+            gamma_t = gamma_tp1
+            indices_t = indices_tp1
+        rewards[-1] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=5000) for _ in range(num_evaluation_runs))
+
+        # Plot results:
+        mean_rewards = np.mean(rewards, axis=1)
+        sem_rewards = st.sem(rewards, axis=1)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        x = np.array([evaluation_interval*i for i in range(num_timesteps // evaluation_interval + 1)])
+        confs = sem_rewards * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
+        label = '$\\alpha_a$:{}, $\\alpha_c$:{}, $\\alpha_w$:{}, $\\lambda_c$:{}'.format(alpha_a, alpha_c, alpha_w, lambda_c)
+        ax.errorbar(x, mean_rewards, yerr=[confs, confs], label=label)
+        plt.legend(loc='lower right')
+        plt.title('Mountain Car')
+        plt.xlabel('Timesteps')
+        plt.ylabel('Total Reward')
+        plt.ylim(-5000, 0)
+        plt.savefig('total_rewards.png')
+        # plt.show()
 
 
 if __name__ == '__main__':

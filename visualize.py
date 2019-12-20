@@ -7,7 +7,7 @@ position_limits = np.array([-1.2, .6])
 velocity_limits = np.array([-.07, .07])
 
 
-def plot_learned_value_function(tile_coder, critic, num_samples_per_dimension=100):
+def plot_learned_value_function(critic, tile_coder, num_samples_per_dimension=100):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
@@ -31,7 +31,7 @@ def plot_learned_value_function(tile_coder, critic, num_samples_per_dimension=10
     plt.show()
 
 
-def plot_learned_policy(tile_coder, actor, num_samples_per_dimension=100):
+def plot_learned_policy(actor, tile_coder, num_samples_per_dimension=100):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
