@@ -133,7 +133,7 @@ class ACETests(unittest.TestCase):
         ax = fig.add_subplot(111)
         x = np.array([evaluation_interval*i for i in range(num_timesteps // evaluation_interval + 1)])
         confs = sem_rewards * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
-        label = '$\\alpha_a$:{}, $\\alpha_c$:{}, $\\alpha_w$:{}, $\\lambda_c$:{}, $\\eta$:{}'.format(alpha_a, alpha_c, alpha_w, lambda_c, eta)
+        label = '$\\alpha_a$:{}, $\\alpha_c$:{}, $\\alpha_w$:{}, $\\lambda_c$:{}, $\\eta$:{}{}'.format(alpha_a, alpha_c, alpha_w, lambda_c, eta, '(OffPAC)' if eta == 0. else '')
         ax.errorbar(x, mean_rewards, yerr=[confs, confs], label=label)
         plt.legend(loc='lower right')
         plt.title('Mountain Car')
