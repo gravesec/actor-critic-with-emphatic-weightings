@@ -76,10 +76,11 @@ class ACETests(unittest.TestCase):
         self.assertGreater(g_t, -250)
 
     def test_binary_ace_off_policy(self):
+        num_runs = 5
         num_timesteps = 50000
         evaluation_interval = 1000
         num_evaluation_runs = 5
-        rewards = np.zeros((num_timesteps // evaluation_interval + 1, num_evaluation_runs))
+        rewards = np.zeros((num_runs, num_timesteps // evaluation_interval + 1, num_evaluation_runs))
 
         alpha_a = .001
         alpha_c = .05
@@ -95,39 +96,44 @@ class ACETests(unittest.TestCase):
         num_tiles = 9
         num_tilings = 9
         tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, True)
-        actor = BinaryACE(env.action_space.n, num_features)
-        critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
 
-        indices_t = tc.indices(env.reset())
-        gamma_t = 0.
-        for t in tqdm(range(num_timesteps)):
-            if t % evaluation_interval == 0:
-                rewards[t // evaluation_interval] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=5000) for _ in range(num_evaluation_runs))
+        for run_num in range(num_runs):
+            actor = BinaryACE(env.action_space.n, num_features)
+            critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
 
-            a_t = rng.choice(env.action_space.n)
-            s_tp1, r_tp1, terminal, _ = env.step(a_t)
-            if terminal:
-                s_tp1 = env.reset()
-                gamma_tp1 = 0.
-            else:
-                gamma_tp1 = 1.
-            indices_tp1 = tc.indices(s_tp1)
+            indices_t = tc.indices(env.reset())
+            gamma_t = 0.
+            for t in tqdm(range(num_timesteps)):
+                if t % evaluation_interval == 0:
+                    rewards[run_num, t // evaluation_interval] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=5000) for _ in range(num_evaluation_runs))
 
-            pi_t = actor.pi(indices_t)
-            mu_t = np.ones(env.action_space.n) / env.action_space.n
-            rho_t = pi_t[a_t] / mu_t[a_t]
+                a_t = rng.choice(env.action_space.n)
+                s_tp1, r_tp1, terminal, _ = env.step(a_t)
+                if terminal:
+                    s_tp1 = env.reset()
+                    gamma_tp1 = 0.
+                else:
+                    gamma_tp1 = 1.
+                indices_tp1 = tc.indices(s_tp1)
 
-            delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
-            critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
-            actor.learn(gamma_t, 1., eta, alpha_a, rho_t, delta_t, indices_t, a_t)
+                pi_t = actor.pi(indices_t)
+                mu_t = np.ones(env.action_space.n) / env.action_space.n
+                rho_t = pi_t[a_t] / mu_t[a_t]
 
-            gamma_t = gamma_tp1
-            indices_t = indices_tp1
-        rewards[-1] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=5000) for _ in range(num_evaluation_runs))
+                delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
+                critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+                actor.learn(gamma_t, 1., eta, alpha_a, rho_t, delta_t, indices_t, a_t)
+
+                gamma_t = gamma_tp1
+                indices_t = indices_tp1
+            rewards[run_num, -1] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=5000) for _ in range(num_evaluation_runs))
 
         # Plot results:
-        mean_rewards = np.mean(rewards, axis=1)
-        sem_rewards = st.sem(rewards, axis=1)
+        mean_eval_rewards = np.mean(rewards, axis=2)
+        var_eval_rewards = np.var(rewards, axis=2)
+
+        mean_rewards = np.mean(mean_eval_rewards, axis=0)
+        sem_rewards = np.sqrt(np.sum(var_eval_rewards / num_evaluation_runs, axis=0)) / num_runs
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
