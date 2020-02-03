@@ -14,22 +14,15 @@ from joblib import Parallel, delayed
 # TODO: Figure out how to append to a memmap in case we want to do more runs later on (we might get this without any extra work with checkpointing).
 
 
-def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters):
-    gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit = parameters
-    num_tiles = int(num_tiles)
-    num_tilings = int(num_tilings)
-    num_features = int(num_features)
-    bias_unit = int(bias_unit)
+def run_ace(transitions, gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit):
+    tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
+    actor = BinaryACE(env.action_space.n, num_features)
+    critic = BinaryTDC(num_features, alpha_c, alpha_c2, lambda_c)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
 
-    tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
-    actor = BinaryACE(env.action_space.n, num_features)
-    critic = BinaryTDC(num_features, alpha_c, alpha_w, lambda_c)
-
     policies = np.zeros(num_policies, dtype=policy_dtype)
-    transitions = experience_memmap[run_num]  # Get the run of experience to learn from.
     gamma_t = 0.
     indices_t = tc.indices(transitions[0][0])
     for t, transition in enumerate(transitions):
@@ -63,7 +56,19 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     padded_weights = np.zeros_like(policies[-1][1])
     padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
     policies[-1] = (t+1, padded_weights)
-    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_w, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit, policies)
+    return policies
+
+
+def run_ace_configurations(policies_memmap, experience_memmap, run_num, config_num, parameters):
+    gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit = parameters
+    num_tiles = int(num_tiles)
+    num_tilings = int(num_tilings)
+    num_features = int(num_features)
+    bias_unit = int(bias_unit)
+
+    transitions = experience_memmap[run_num]  # Get the run of experience to learn from.
+    policies = run_ace(transitions, gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit)  # Run ACE on the experience.
+    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit, policies)  # Store the learned policies in the memmap.
 
 
 if __name__ == '__main__':
@@ -118,7 +123,7 @@ if __name__ == '__main__':
 
     # Run ACE for each set of parameters in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=51)(
-        delayed(run_ace)(
+        delayed(run_ace_configurations)(
             policies_memmap, experience_memmap,
             run_num, config_num, parameters
         )
