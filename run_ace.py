@@ -3,11 +3,11 @@ import gym_puddle
 import argparse
 import numpy as np
 from pathlib import Path
-from joblib import Parallel, delayed
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
+from joblib import Parallel, delayed
 
 
 # TODO: Figure out how to do checkpointing (i.e. keep track of progress via a memmap so if the process gets killed it can pick up where it left off).
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to run ACE on.')
-    parser.add_argument('--parameters', required=True, type=float, nargs=10, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_STEP_SIZE_2', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'NUM_FEATURES', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once. Example:\n--parameters .99 .1 .05 .0001 .0 .0 9 9 100000 1')
+    parser.add_argument('--parameters', required=True, type=float, nargs=10, action='append', metavar=('DISCOUNT_RATE', 'ACTOR_STEP_SIZE', 'CRITIC_STEP_SIZE', 'CRITIC_STEP_SIZE_2', 'CRITIC_TRACE_DECAY_RATE', 'OFFPAC_ACE_TRADEOFF', 'NUM_TILES', 'NUM_TILINGS', 'NUM_FEATURES', 'BIAS_UNIT'), help='Parameters to use for ACE. Can be specified multiple times to run multiple configurations of ACE at once. Example:\n--parameters .99 .001 .05 .0001 .0 .0 9 9 100000 1')
     args = parser.parse_args()
 
     # Save the command line arguments in a format interpretable by argparse:
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     max_num_features = int(max(parameters[8] for parameters in args.parameters))
     policy_dtype = np.dtype(
         [
-            ('timestep', int),
+            ('timesteps', int),
             ('weights', float, (env.action_space.n, max_num_features))
         ]
     )
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), shape=(num_runs, num_configurations), dtype=configuration_dtype, mode='w+')
 
     # Run ACE for each set of parameters in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=10)(
+    Parallel(n_jobs=args.num_cpus, verbose=51)(
         delayed(run_ace)(
             policies_memmap, experience_memmap,
             run_num, config_num, parameters

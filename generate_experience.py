@@ -71,7 +71,7 @@ if __name__ == '__main__':
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=1000, backend=args.backend)(
+    Parallel(n_jobs=args.num_cpus, verbose=51, backend=args.backend)(
         delayed(generate_experience)(
             experience, run_num, random_seed
         )

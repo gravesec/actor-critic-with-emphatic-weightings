@@ -3,10 +3,10 @@ import random
 import argparse
 import numpy as np
 from pathlib import Path
-from joblib import Parallel, delayed
 from src import utils
 from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
+from joblib import Parallel, delayed
 
 
 def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     performance_memmap = np.lib.format.open_memmap(str(experiment_path / '{}_performance.npy'.format(args.objective)), shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
     # Evaluate the learned policies in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=10, backend=args.backend)(
+    Parallel(n_jobs=args.num_cpus, verbose=51, backend=args.backend)(
         delayed(evaluate_policies)(
             performance_memmap, policies_memmap,
             evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
