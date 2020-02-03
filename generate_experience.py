@@ -77,6 +77,3 @@ if __name__ == '__main__':
         )
         for run_num, random_seed in enumerate(random_seeds)
     )
-
-    # Close the memmap file:
-    del experience

@@ -125,7 +125,3 @@ if __name__ == '__main__':
         for config_num, parameters in enumerate(args.parameters)
         for run_num in range(num_runs)
     )
-
-    # Close the memmap files:
-    del experience_memmap
-    del policies_memmap

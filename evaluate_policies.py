@@ -95,7 +95,3 @@ if __name__ == '__main__':
         for config_num in range(num_configurations)
         for policy_num in range(num_policies)
     )
-
-    # Close the memmap file:
-    del policies_memmap
-    del performance_memmap
