@@ -8,40 +8,47 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 
+parameter_name_to_string = {
+    'gamma': '$\\gamma$',
+    'alpha_a': '$\\alpha_a$',
+    'alpha_c': '$\\alpha_c$',
+    'alpha_c2': '$\\alpha_{c2}$',
+    'lambda_c': '$\\lambda_c$',
+    'eta': '$\\eta$',
+    'num_tiles': '$\\#_{tiles}$',
+    'num_tilings': '$\\#_{tilings}$',
+    'num_features': '$\\#_{features}$',
+    'bias_unit': 'bias'
+}
+
+
 def create_configuration_label(configuration_num, configurations):
     configuration = list(configurations[configuration_num])
     parameter_names = list(configurations.dtype.names)
-    label = ''
+    label = []
     for parameter_index, parameter in enumerate(configuration[:-1]):
         parameter_name = parameter_names[parameter_index]
         parameter_values = configurations[parameter_name]
         if not np.all(parameter_values == parameter):
-            if parameter_index <= 5:
-                parameter_string = '$\\' + parameter_name + '$'
-            else:
-                parameter_string = parameter_name
-            label += parameter_string + ':' + str(parameter) + ', '
-    return label
+            label.append(':'.join([parameter_name_to_string[parameter_name], str(parameter)]))
+    return ', '.join(label)
 
 
 def create_common_parameters_string(configurations):
     parameter_names = list(configurations.dtype.names)
-    common_params = ''
+    common_params = []
     for parameter_index, parameter_name in enumerate(parameter_names[:-1]):
         if np.allclose(configurations[parameter_name], configurations[parameter_name][0]):
-            if parameter_index <= 5:
-                parameter_string = '$\\' + parameter_name + '$'
-            else:
-                parameter_string = parameter_name
-            common_params += parameter_string + ':' + str(configurations[parameter_name][0]) + ', '
-    return common_params
+            common_params.append(':'.join([parameter_name_to_string[parameter_name], str(configurations[parameter_name][0])]))
+    return ', '.join(common_params)
 
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='A script to evaluate policies on the Mountain Car environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='A script to plot performance on the given environment.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: mountain car start state.)')
+    parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: start state.)')
+    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to evaluate the learned policies on.')
     args = parser.parse_args()
 
     experiment_path = Path(args.experiment_name)
@@ -69,9 +76,9 @@ if __name__ == '__main__':
         ax.errorbar(x, y, yerr=[confidence_intervals[configuration_num], confidence_intervals[configuration_num]], label=create_configuration_label(configuration_num, configurations))
 
     plt.legend(loc="lower right")
-    plt.suptitle('Mountain car')
-    plt.title(create_common_parameters_string(configurations), fontsize=8)
+    plt.suptitle(args.environment)
+    plt.title(create_common_parameters_string(configurations), fontsize=9)
     plt.xlabel('Timesteps')
     plt.ylabel('Total Reward')
-    plt.ylim(-1000, 0)
+    # plt.ylim(-1000, 0)
     plt.savefig('{}_performance'.format(args.objective))

@@ -58,7 +58,7 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
 if __name__ == '__main__':
 
     # Parse command line arguments:
-    parser = argparse.ArgumentParser(description='A script to evaluate policies on the Mountain Car environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='A script to evaluate policies on the given environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
     parser.add_argument('--num_evaluation_runs', type=int, default=5, help='The number of times to evaluate each policy')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per run')
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: environment start state.)')
-    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to generate experience from.')
+    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to evaluate the learned policies on.')
     args = parser.parse_args()
 
     # Generate the random seed for each run without replacement to prevent the birthday problem:
