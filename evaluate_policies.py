@@ -36,7 +36,9 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
 
     # Set up the environment:
     import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
-    env = gym.make(args.environment).env
+    env = gym.make(args.environment)
+    if args.environment != 'PuddleWorld-v0':
+        env = env.env
     env.seed(random_seed)
     rng = env.np_random
     if args.objective == 'episodic':

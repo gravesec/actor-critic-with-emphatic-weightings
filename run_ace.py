@@ -89,7 +89,9 @@ if __name__ == '__main__':
     num_runs, num_timesteps = experience_memmap.shape
 
     # Create the memmapped array of learned policies that will be populated in parallel:
-    env = gym.make(args.environment).env  # Make a dummy env to get shape info.
+    env = gym.make(args.environment)  # Make a dummy env to get shape info.
+    if args.environment != 'PuddleWorld-v0':
+        env = env.env
     num_policies = num_timesteps // args.checkpoint_interval + 1
     max_num_features = int(max(parameters[8] for parameters in args.parameters))
     policy_dtype = np.dtype(

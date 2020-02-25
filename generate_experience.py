@@ -15,7 +15,9 @@ from joblib import Parallel, delayed
 def generate_experience(experience, run_num, random_seed):
     # Initialize the environment:
     import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
-    env = gym.make(args.environment).env
+    env = gym.make(args.environment)
+    if args.environment != 'PuddleWorld-v0':
+        env = env.env
     env.seed(random_seed)
     rng = env.np_random
 
@@ -66,7 +68,9 @@ if __name__ == '__main__':
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Create the memmapped structured array of experience to be populated in parallel:
-    env = gym.make(args.environment).env  # Make a dummy env to get shape info for observations.
+    env = gym.make(args.environment)  # Make a dummy env to get shape info for observations.
+    if args.environment != 'PuddleWorld-v0':
+        env = env.env
     transition_dtype = np.dtype([('s_t', float, env.observation_space.shape), ('a_t', int), ('r_tp1', float), ('s_tp1', float, env.observation_space.shape), ('terminal', bool)])
     experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
