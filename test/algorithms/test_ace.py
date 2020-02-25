@@ -9,7 +9,6 @@ from src.algorithms.ace import LinearACE, BinaryACE
 from src.algorithms.totd import LinearTOTD, BinaryTOTD
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
-from visualize import plot_learned_policy, plot_learned_value_function
 from evaluate_policies import evaluate_policy
 
 
