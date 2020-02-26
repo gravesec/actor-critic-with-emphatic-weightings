@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 
 def generate_experience(experience, run_num, random_seed):
     # Check if this run of experience has already been generated:
-    if np.count_nonzero(experience[run_num]) > 0:
+    if np.count_nonzero(experience[run_num]) != 0:
         return
 
     # Initialize the environment:
