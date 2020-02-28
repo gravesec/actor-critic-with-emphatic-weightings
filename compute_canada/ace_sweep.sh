@@ -1,23 +1,26 @@
 #!/bin/bash
 
+#Run this script from the $SCRATCH directory
+
 #SBATCH --account=def-sutton
-#SBATCH --job-name=ace_mc_sweep
+#SBATCH --job-name=ace_sweep
 #SBATCH --mail-user=graves@ualberta.ca
 #SBATCH --mail-type=ALL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=80  # Change to 80 to use hyperthreading.
-#SBATCH --time=00-01:00:00  # DD-HH:MM:SS
+#SBATCH --time=00-00:15:00  # DD-HH:MM:SS
 
 module load python/3.6.5
 
 # Configure virtual environment locally:
-virtualenv --no-download $SLURM_TMPDIR/ve
+virtualenv $SLURM_TMPDIR/ve
 source $SLURM_TMPDIR/ve/bin/activate
-pip install --no-index --upgrade pip
-pip install --no-index -r $HOME/actor-critic-with-emphatic-weightings/requirements.txt
+pip install --upgrade pip
+#pip install -e $HOME/gym-puddle
+pip install -r $HOME/actor-critic-with-emphatic-weightings/requirements.txt
 
 python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
---experiment_name $SCRATCH/actor-critic-with-emphatic-weightings/ace_mc_sweep \
+--experiment_name $SCRATCH/ace_sweep \
 --num_runs 10 \
 --num_timesteps 100000 \
 --random_seed 3139378768 \
@@ -25,17 +28,17 @@ python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
 --backend "loky" \
 --verbosity 0 \
 --behaviour_policy "lambda s: np.ones(env.action_space.n)/env.action_space.n" \
---environment "MountainCar-v0"
+--environment $1
 
 python $HOME/actor-critic-with-emphatic-weightings/run_ace.py \
---experiment_name $SCRATCH/actor-critic-with-emphatic-weightings/ace_mc_sweep \
+--experiment_name $SCRATCH/ace_sweep \
 --checkpoint_interval 10000 \
 --num_cpus -1 \
 --backend "loky" \
 --verbosity 0 \
 --interest_function "lambda s, g=1: 1." \
 --behaviour_policy "lambda s: np.ones(env.action_space.n)/env.action_space.n" \
---environment "MountainCar-v0" \
+--environment $1 \
 --run_mode "combinations" \
 --gamma 1.0 \
 --alpha_a .00001 .00005 .0001 .0005 .001 .005 .01 .05 .1 \
@@ -49,7 +52,7 @@ python $HOME/actor-critic-with-emphatic-weightings/run_ace.py \
 --bias_unit 1
 
 python $HOME/actor-critic-with-emphatic-weightings/evaluate_policies.py \
---experiment_name $SCRATCH/actor-critic-with-emphatic-weightings/ace_mc_sweep \
+--experiment_name $SCRATCH/ace_sweep \
 --num_evaluation_runs 5 \
 --max_timesteps 5000 \
 --random_seed 1944801619 \
@@ -57,4 +60,4 @@ python $HOME/actor-critic-with-emphatic-weightings/evaluate_policies.py \
 --backend "loky" \
 --verbosity 0 \
 --objective "episodic" \
---environment "MountainCar-v0"
+--environment $1
