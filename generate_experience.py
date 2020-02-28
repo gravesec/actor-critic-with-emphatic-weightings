@@ -1,3 +1,4 @@
+import os
 import gym
 import gym_puddle
 import random
@@ -9,6 +10,10 @@ from joblib import Parallel, delayed
 
 
 def generate_experience(experience, run_num, random_seed):
+    # Check if this run of experience has already been generated:
+    if np.count_nonzero(experience[run_num]) != 0:
+        return
+
     # Initialize the environment:
     import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
     env = gym.make(args.environment)
@@ -69,12 +74,16 @@ if __name__ == '__main__':
     if args.environment != 'PuddleWorld-v0':
         env = env.env
     transition_dtype = np.dtype([('s_t', float, env.observation_space.shape), ('a_t', int), ('r_tp1', float), ('s_tp1', float, env.observation_space.shape), ('terminal', bool)])
-    experience = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
+    experience_memmap_path = str(experiment_path / 'experience.npy')
+    if os.path.isfile(experience_memmap_path):
+        experience_memmap = np.lib.format.open_memmap(experience_memmap_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r+')
+    else:
+        experience_memmap = np.lib.format.open_memmap(experience_memmap_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=args.verbosity, backend=args.backend)(
         delayed(generate_experience)(
-            experience, run_num, random_seed
+            experience_memmap, run_num, random_seed
         )
         for run_num, random_seed in enumerate(random_seeds)
     )

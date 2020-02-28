@@ -1,3 +1,4 @@
+import os
 import gym
 import random
 import argparse
@@ -26,6 +27,9 @@ def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, rend
 
 
 def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
+    if np.count_nonzero(performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num]) != 0:
+        return
+
     # Load the policy to evaluate:
     configuration = policies_memmap[ace_run_num, config_num]
     num_features = configuration['num_features']
@@ -85,7 +89,11 @@ if __name__ == '__main__':
     num_ace_runs, num_configurations, num_policies = policies_memmap['policies'].shape
 
     # Create the memmapped array of results to be populated in parallel:
-    performance_memmap = np.lib.format.open_memmap(str(experiment_path / '{}_performance.npy'.format(args.objective)), shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
+    performance_memmap_path = str(experiment_path / '{}_performance.npy'.format(args.objective))
+    if os.path.isfile(performance_memmap_path):
+        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='r+')
+    else:
+        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
     # Evaluate the learned policies in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=args.verbosity, backend=args.backend)(
