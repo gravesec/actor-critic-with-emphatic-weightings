@@ -1,6 +1,7 @@
 #!/bin/bash
 
-#Run this script from the $SCRATCH directory
+#Run this script from the $SCRATCH directory on Niagara to save the output ($HOME is read-only):
+#$ sbatch $HOME/actor-critic-with-emphatic-weightings/compute_canada/ace_sweep.sh MountainCar-v0
 
 #SBATCH --account=def-sutton
 #SBATCH --job-name=ace_sweep
