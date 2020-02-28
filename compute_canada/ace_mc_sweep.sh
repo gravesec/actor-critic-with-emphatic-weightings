@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=80  # Change to 80 to use hyperthreading.
 #SBATCH --time=00-01:00:00  # DD-HH:MM:SS
 
-module load python/3.7
+module load python/3.6.5
 
 # Configure virtual environment locally:
 virtualenv --no-download $SLURM_TMPDIR/ve
@@ -51,7 +51,7 @@ python $HOME/actor-critic-with-emphatic-weightings/run_ace.py \
 python $HOME/actor-critic-with-emphatic-weightings/evaluate_policies.py \
 --experiment_name $SCRATCH/actor-critic-with-emphatic-weightings/ace_mc_sweep \
 --num_evaluation_runs 5 \
---max_timesteps 1000 \
+--max_timesteps 5000 \
 --random_seed 1944801619 \
 --num_cpus -1 \
 --backend "loky" \
