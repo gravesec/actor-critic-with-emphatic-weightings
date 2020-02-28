@@ -29,7 +29,7 @@ python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
 
 python $HOME/actor-critic-with-emphatic-weightings/run_ace.py \
 --experiment_name $SCRATCH/actor-critic-with-emphatic-weightings/ace_mc_sweep \
---checkpoint_interval 5000 \
+--checkpoint_interval 10000 \
 --num_cpus -1 \
 --backend "loky" \
 --verbosity 0 \
