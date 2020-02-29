@@ -20,7 +20,7 @@ module load python/3.6.5
 #pip install -e $HOME/gym-puddle
 #pip install -r $HOME/actor-critic-with-emphatic-weightings/requirements.txt
 
-source $HOME/ve/bin/activate
+source $HOME/actor-critic-with-emphatic-weightings/ve/bin/activate
 
 python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
 --experiment_name $SCRATCH/ace_sweep \
