@@ -1,15 +1,12 @@
 #!/bin/bash
 
 #Run this script from the $SCRATCH directory on Niagara to save the output ($HOME is read-only):
-#$ sbatch $HOME/actor-critic-with-emphatic-weightings/compute_canada/ace_sweep.sh MountainCar-v0
+#$ sbatch --account=def-sutton --mail-user=graves@ualberta.ca --mail-type=ALL $HOME/actor-critic-with-emphatic-weightings/compute_canada/ace_sweep.sh MountainCar-v0
 
-#SBATCH --account=def-sutton
 #SBATCH --job-name=ace_sweep
-#SBATCH --mail-user=graves@ualberta.ca
-#SBATCH --mail-type=ALL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=80  # Change to 80 to use hyperthreading.
-#SBATCH --time=00-00:15:00  # DD-HH:MM:SS
+#SBATCH --time=00-01:00:00  # DD-HH:MM:SS
 
 module load python/3.6.5
 
