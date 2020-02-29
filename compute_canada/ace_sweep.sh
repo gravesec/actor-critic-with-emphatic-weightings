@@ -14,11 +14,13 @@
 module load python/3.6.5
 
 # Configure virtual environment locally:
-virtualenv $SLURM_TMPDIR/ve
-source $SLURM_TMPDIR/ve/bin/activate
-pip install --upgrade pip
+#virtualenv $SLURM_TMPDIR/ve
+#source $SLURM_TMPDIR/ve/bin/activate
+#pip install --upgrade pip
 #pip install -e $HOME/gym-puddle
-pip install -r $HOME/actor-critic-with-emphatic-weightings/requirements.txt
+#pip install -r $HOME/actor-critic-with-emphatic-weightings/requirements.txt
+
+source $HOME/ve/bin/activate
 
 python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
 --experiment_name $SCRATCH/ace_sweep \
