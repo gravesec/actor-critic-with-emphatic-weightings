@@ -1,4 +1,5 @@
 import os
+import gym_puddle
 import gym
 import random
 import argparse
