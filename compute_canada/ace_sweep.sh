@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #Run this script from the $SCRATCH directory on Niagara to save the output ($HOME is read-only):
-#$ sbatch --account=def-sutton --mail-user=graves@ualberta.ca --mail-type=ALL $HOME/actor-critic-with-emphatic-weightings/compute_canada/ace_sweep.sh MountainCar-v0 100000 10000
+#$ sbatch --account=def-sutton --mail-user=graves@ualberta.ca --mail-type=ALL $SCRATCH/actor-critic-with-emphatic-weightings/compute_canada/ace_sweep.sh MountainCar-v0 100000 10000
 
 #SBATCH --job-name=ace_sweep
 #SBATCH --nodes=1
@@ -14,12 +14,12 @@ module load python/3.6.5
 #virtualenv $SLURM_TMPDIR/ve
 #source $SLURM_TMPDIR/ve/bin/activate
 #pip install --upgrade pip
-#pip install -e $HOME/gym-puddle
-#pip install -r $HOME/actor-critic-with-emphatic-weightings/requirements.txt
+#pip install -e $SCRATCH/gym-puddle
+#pip install -r $SCRATCH/actor-critic-with-emphatic-weightings/requirements.txt
 
-source $HOME/actor-critic-with-emphatic-weightings/ve/bin/activate
+source $SCRATCH/actor-critic-with-emphatic-weightings/ve/bin/activate
 
-python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
+python $SCRATCH/actor-critic-with-emphatic-weightings/generate_experience.py \
 --experiment_name $SCRATCH/$1 \
 --num_runs 10 \
 --num_timesteps $2 \
@@ -30,7 +30,7 @@ python $HOME/actor-critic-with-emphatic-weightings/generate_experience.py \
 --behaviour_policy "lambda s: np.ones(env.action_space.n)/env.action_space.n" \
 --environment $1
 
-python $HOME/actor-critic-with-emphatic-weightings/run_ace.py \
+python $SCRATCH/actor-critic-with-emphatic-weightings/run_ace.py \
 --experiment_name $SCRATCH/$1 \
 --checkpoint_interval $3 \
 --num_cpus -1 \
@@ -51,7 +51,7 @@ python $HOME/actor-critic-with-emphatic-weightings/run_ace.py \
 --num_features 100000 \
 --bias_unit 1
 
-python $HOME/actor-critic-with-emphatic-weightings/evaluate_policies.py \
+python $SCRATCH/actor-critic-with-emphatic-weightings/evaluate_policies.py \
 --experiment_name $SCRATCH/$1 \
 --num_evaluation_runs 5 \
 --max_timesteps 5000 \
