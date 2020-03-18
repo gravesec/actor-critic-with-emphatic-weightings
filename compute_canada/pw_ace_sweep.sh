@@ -19,6 +19,8 @@ source $SCRATCH/actor-critic-with-emphatic-weightings/ve/bin/activate
 
 module load python/3.6.5
 
+date
+
 echo $1
 echo $2
 echo $3
@@ -45,10 +47,10 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/run_ace.py \
 --environment $1 \
 --run_mode "combinations" \
 --gamma 1.0 \
---alpha_a .00001 .00005 .0001 .0005 .001 .005 .01 .05 .1 \
---alpha_c .00001 .00005 .0001 .0005 .001 .005 .01 .05 .1 \
---alpha_c2 .0 .00001 .00005 .0001 .0005 .001 .005 .01 .05 .1 \
---lambda_c .0 .4 .7 .9 .99 \
+--alpha_a  .0001 .001 .01 .1 \
+--alpha_c  .0001 .001 .01 .1 \
+--alpha_c2 .0 .00001 .0001 .001 .01 \
+--lambda_c .0 .4 .7 .9 \
 --eta 0. 1. \
 --num_tiles 9 \
 --num_tilings 9 \
@@ -65,3 +67,5 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/evaluate_policies.py \
 --verbosity 0 \
 --objective "episodic" \
 --environment $1
+
+date
