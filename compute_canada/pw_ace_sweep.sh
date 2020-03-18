@@ -6,7 +6,7 @@
 #SBATCH --job-name=pw_ace_sweep
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=80  # Change to 80 to use hyperthreading.
-#SBATCH --time=00-01:00:00  # DD-HH:MM:SS
+#SBATCH --time=00-10:00:00  # DD-HH:MM:SS
 
 # Configure virtual environment locally:
 #virtualenv $SLURM_TMPDIR/ve
