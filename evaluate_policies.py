@@ -39,27 +39,32 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
     actor = BinaryACE(weights.shape[0], weights.shape[1])
     actor.theta = weights
 
-    # Set up the environment:
-    import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
-    env = gym.make(args.environment)
-    if args.environment != 'PuddleWorld-v0':
-        env = env.env
-    env.seed(random_seed)
-    rng = env.np_random
-    if args.objective == 'episodic':
-        # Use the environment's start state:
-        s_t = env.reset()
+    # Handle situations where the learning process diverged:
+    if np.any(np.isnan(weights)):
+        # If the weights overflowed, assign NaN as return:
+        performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = np.nan
     else:
-        raise NotImplementedError
+        # Set up the environment:
+        import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
+        env = gym.make(args.environment)
+        if args.environment != 'PuddleWorld-v0':
+            env = env.env
+        env.seed(random_seed)
+        rng = env.np_random
+        if args.objective == 'episodic':
+            # Use the environment's start state:
+            s_t = env.reset()
+        else:
+            raise NotImplementedError
 
-    # Configure the tile coder:
-    num_tiles = configuration['num_tiles']
-    num_tilings = configuration['num_tilings']
-    bias_unit = configuration['bias_unit']
-    tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
+        # Configure the tile coder:
+        num_tiles = configuration['num_tiles']
+        num_tilings = configuration['num_tilings']
+        bias_unit = configuration['bias_unit']
+        tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
 
-    # Write the total rewards received to file:
-    performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(actor, tc, env, rng)
+        # Write the total rewards received to file:
+        performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(actor, tc, env, rng)
 
 
 if __name__ == '__main__':
