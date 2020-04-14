@@ -46,16 +46,16 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         pi_t = actor.pi(indices_t)
         mu_t = mu(s_t)
         rho_t = pi_t[a_t] / mu_t[a_t]
-        # Compute TD error:
-        v_t = critic.estimate(indices_t)
-        v_tp1 = critic.estimate(indices_tp1, q_mode=True, a=a_tp1)
-        delta_t = r_tp1 + gamma_tp1 * v_tp1 - v_t
-        # Update actor:
-        actor.learn(gamma_t, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
         # Compute importance sampling ratio for the policy in s_tp1:
         pi_tp1 = actor.pi(indices_tp1)
         mu_tp1 = mu(s_tp1)
         rho_tp1 = pi_tp1[a_tp1] / mu_tp1[a_tp1]
+        # Compute TD error:
+        v_t = critic.estimate(indices_t)
+        v_tp1 = critic.estimate(indices_tp1, q_mode=True, a=a_tp1)
+        delta_t = r_tp1 + rho_tp1 * gamma_tp1 * v_tp1 - v_t
+        # Update actor:
+        actor.learn(gamma_t, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
         # Update critic:
         critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t, r_tp1=r_tp1, rho_tp1=rho_tp1, a_t=a_t, a_tp1=a_tp1)
 
