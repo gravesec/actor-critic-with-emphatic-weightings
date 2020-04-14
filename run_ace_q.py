@@ -55,9 +55,9 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         # Compute importance sampling ratio for the policy in s_tp1:
         pi_tp1 = actor.pi(indices_tp1)
         mu_tp1 = mu(s_tp1)
-        rho_tp1 = pi_tp1[a_tp1] / mu_t[a_tp1]
+        rho_tp1 = pi_tp1[a_tp1] / mu_tp1[a_tp1]
         # Update critic:
-        critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t, r_t=r_tp1, rho_tp1=rho_tp1, a_t=a_t, a_tp1=a_tp1)
+        critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t, r_tp1=r_tp1, rho_tp1=rho_tp1, a_t=a_t, a_tp1=a_tp1)
 
         gamma_t = gamma_tp1
         indices_t = indices_tp1

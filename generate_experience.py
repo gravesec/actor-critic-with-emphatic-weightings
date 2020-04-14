@@ -27,11 +27,8 @@ def generate_experience(experience, run_num, random_seed):
 
     # Generate the required timesteps of experience:
     s_t = env.reset()
+    a_t = rng.choice(env.action_space.n, p=mu(s_t))
     for t in range(args.num_timesteps):
-        # Select an action:
-        mu_t = mu(s_t)
-        a_t = rng.choice(env.action_space.n, p=mu_t)
-
         # Take action a_t, observe next state s_tp1 and reward r_tp1:
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
 
@@ -39,11 +36,14 @@ def generate_experience(experience, run_num, random_seed):
         if terminal:
             s_tp1 = env.reset()
 
+        a_tp1 = rng.choice(env.action_space.n, p=mu(s_t))
+
         # Add the transition:
-        experience[run_num, t] = (s_t, a_t, r_tp1, s_tp1, terminal)
+        experience[run_num, t] = (s_t, a_t, r_tp1, s_tp1, a_tp1, terminal)
 
         # Update temporary variables:
         s_t = s_tp1
+        a_t = a_tp1
 
 
 if __name__ == '__main__':
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to generate experience from the specified behaviour policy on the specified environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--num_runs', type=int, default=30, help='The number of independent runs of experience to generate')
+    parser.add_argument('--num_runs', type=int, default=8, help='The number of independent runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=2937573853, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     env = gym.make(args.environment)  # Make a dummy env to get shape info for observations.
     if args.environment != 'PuddleWorld-v0':
         env = env.env
-    transition_dtype = np.dtype([('s_t', float, env.observation_space.shape), ('a_t', int), ('r_tp1', float), ('s_tp1', float, env.observation_space.shape), ('terminal', bool)])
+    transition_dtype = np.dtype([('s_t', float, env.observation_space.shape), ('a_t', int), ('r_tp1', float), ('s_tp1', float, env.observation_space.shape), ('a_tp1', int), ('terminal', bool)])
     experience_memmap_path = str(experiment_path / 'experience.npy')
     if os.path.isfile(experience_memmap_path):
         experience_memmap = np.lib.format.open_memmap(experience_memmap_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r+')
