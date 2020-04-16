@@ -80,5 +80,5 @@ if __name__ == '__main__':
     plt.title(create_common_parameters_string(configurations), fontsize=9)
     plt.xlabel('Timesteps')
     plt.ylabel('Total Reward')
-    # plt.ylim(-1000, 0)
+    plt.ylim(-1000, 0)
     plt.savefig('{}_performance'.format(args.objective))

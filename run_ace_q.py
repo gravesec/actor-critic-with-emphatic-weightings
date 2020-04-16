@@ -84,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to run ACE on.')
     parser.add_argument('--run_mode', type=str, choices=['combinations', 'corresponding'], default='combinations', help='Whether to run all combinations of given parameters, or only corresponding parameters')
     parser.add_argument('--gamma', '--discount_rate', type=float, nargs='+', default=[1.], help='Discount rate.')
-    parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', default=[.01], help='Step sizes for the actor.')
+    parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', default=[.001], help='Step sizes for the actor.')
     parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', default=[.05], help='Step sizes for the critic.')
     parser.add_argument('--alpha_c2', '--critic_step_sizes_2', type=float, nargs='+', default=[.0001], help='Step sizes for the second set of weights in the GTD critic.')
     parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[0.], help='Trace decay rates for the critic.')
