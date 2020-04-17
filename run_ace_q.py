@@ -52,8 +52,8 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         rho_tp1 = pi_tp1[a_tp1] / mu_tp1[a_tp1]
         # Compute TD error:
         v_t = critic.estimate(indices_t)
-        v_tp1 = critic.estimate(indices_tp1, q_mode=True, a=a_tp1)
-        delta_t = r_tp1 + rho_tp1 * gamma_tp1 * v_tp1 - v_t
+        q_t = critic.estimate(indices_t, q_mode=True, a=a_t)
+        delta_t = q_t - v_t
         # Update actor:
         actor.learn(gamma_t, i_t, eta, alpha_a, rho_t, delta_t, indices_t, a_t)
         # Update critic:
