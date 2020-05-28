@@ -1,5 +1,4 @@
 import argparse
-import matplotlib
 import numpy as np
 # matplotlib.use('pdf')
 from pathlib import Path
@@ -72,8 +71,8 @@ if __name__ == '__main__':
         policies = list(configurations[configuration_num])[-1]
         x = policies['timesteps']
         y = mean_performance[configuration_num]
-        confidence_intervals = sem_performance * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
-        ax.errorbar(x, y, yerr=[confidence_intervals[configuration_num], confidence_intervals[configuration_num]], label=create_configuration_label(configuration_num, configurations))
+        confidence_intervals = sem_performance[configuration_num] * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
+        ax.errorbar(x, y, yerr=[confidence_intervals, confidence_intervals], label=create_configuration_label(configuration_num, configurations))
 
     plt.legend(loc="lower right")
     plt.suptitle(args.environment)
