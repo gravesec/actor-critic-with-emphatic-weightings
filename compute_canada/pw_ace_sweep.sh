@@ -52,9 +52,8 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/run_ace.py \
 --alpha_c2 .0 .00001 .0001 .001 .01 \
 --lambda_c .0 .4 .7 .9 \
 --eta 0. 1. \
---num_tiles 9 \
---num_tilings 9 \
---num_features 100000 \
+--num_tiles 10 10 \
+--num_tilings 10 \
 --bias_unit 1
 
 python $SCRATCH/actor-critic-with-emphatic-weightings/evaluate_policies.py \

@@ -1,10 +1,8 @@
 import argparse
 import numpy as np
-# matplotlib.use('pdf')
 from pathlib import Path
 import scipy.stats as st
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 
 
 parameter_name_to_string = {

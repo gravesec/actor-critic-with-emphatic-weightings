@@ -17,11 +17,11 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     if np.count_nonzero(policies_memmap[run_num, config_num]) != 0:
         return
 
-    gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit = parameters
+    gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
 
-    tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
-    actor = BinaryACE(env.action_space.n, num_features)
-    critic = BinaryTDC(num_features, alpha_c, alpha_c2, lambda_c)
+    tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
+    actor = BinaryACE(env.action_space.n, tc.total_num_tiles)
+    critic = BinaryTDC(tc.total_num_tiles, alpha_c, alpha_c2, lambda_c)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
@@ -30,7 +30,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
 
     policies = np.zeros(num_policies, dtype=policy_dtype)
     gamma_t = 0.
-    indices_t = tc.indices(transitions[0][0])
+    indices_t = tc.encode(transitions[0][0])
     for t, transition in enumerate(transitions):
         if t % args.checkpoint_interval == 0:  # Save the learned policy if it's a checkpoint timestep:
             padded_weights = np.zeros_like(policies[t // args.checkpoint_interval][1])
@@ -40,7 +40,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         # Unpack the stored transition.
         s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
         gamma_tp1 = gamma if not terminal else 0  # Transition-dependent discounting.
-        indices_tp1 = tc.indices(s_tp1)
+        indices_tp1 = tc.encode(s_tp1)
         i_t = i(s_t, gamma_t)
         # Compute importance sampling ratio for the policy:
         pi_t = actor.pi(indices_t)
@@ -63,7 +63,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
     policies[-1] = (t+1, padded_weights)
 
-    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, num_features, bias_unit, policies)  # Store the learned policies in the memmap.
+    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, tc.total_num_tiles, bias_unit, policies)  # Store the learned policies in the memmap.
 
 
 if __name__ == '__main__':
@@ -85,9 +85,8 @@ if __name__ == '__main__':
     parser.add_argument('--alpha_c2', '--critic_step_sizes_2', type=float, nargs='+', default=[.0001], help='Step sizes for the second set of weights in the GTD critic.')
     parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[0.], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', '--offpac_ace_tradeoff', type=float, nargs='+', default=[0.], help='Values for the parameter that interpolates between OffPAC (0) and ACE (1).')
-    parser.add_argument('--num_tiles', type=int, nargs='+', default=[9], help='The number of tiles to use in the tile coder.')
-    parser.add_argument('--num_tilings', type=int, nargs='+', default=[9], help='The number of tilings to use in the tile coder.')
-    parser.add_argument('--num_features', type=int, nargs='+', default=[10000], help='The number of features to use in the tile coder.')
+    parser.add_argument('--num_tiles', type=int, nargs='+', action='append', default=[[10, 10]], help='The number of tiles per dimension to use in the tile coder.')
+    parser.add_argument('--num_tilings', type=int, nargs='+', default=[10], help='The number of tilings to use in the tile coder.')
     parser.add_argument('--bias_unit', type=int, nargs='+', default=[1], help='Whether or not to include a bias unit in the tile coder.')
     args = parser.parse_args()
 
@@ -100,11 +99,9 @@ if __name__ == '__main__':
     num_runs, num_timesteps = experience_memmap.shape
 
     # Create the memmapped array of learned policies that will be populated in parallel:
-    env = gym.make(args.environment)  # Make a dummy env to get shape info.
-    if args.environment != 'PuddleWorld-v0':
-        env = env.env
+    env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
     num_policies = num_timesteps // args.checkpoint_interval + 1
-    max_num_features = np.max(args.num_features)
+    max_num_features = np.max(args.num_tilings * np.prod(np.array(args.num_tiles), axis=1) + np.max(args.bias_unit))
     policy_dtype = np.dtype(
         [
             ('timesteps', int),
@@ -119,14 +116,14 @@ if __name__ == '__main__':
             ('alpha_c2', float),
             ('lambda_c', float),
             ('eta', float),
-            ('num_tiles', int),
+            ('num_tiles', int, (2,)),
             ('num_tilings', int),
             ('num_features', int),
             ('bias_unit', bool),
             ('policies', policy_dtype, num_policies)
         ]
     )
-    parameters = [args.gamma, args.alpha_a, args.alpha_c, args.alpha_c2, args.lambda_c, args.eta, args.num_tiles, args.num_tilings, args.num_features, args.bias_unit]
+    parameters = [args.gamma, args.alpha_a, args.alpha_c, args.alpha_c2, args.lambda_c, args.eta, args.num_tiles, args.num_tilings, args.bias_unit]
     if args.run_mode == 'corresponding':
         assert all(len(parameter) == len(args.alpha_a) for parameter in parameters)
         configurations = list(zip(*parameters))  # Transpose parameters list.

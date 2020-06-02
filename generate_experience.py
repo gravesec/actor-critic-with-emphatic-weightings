@@ -70,9 +70,7 @@ if __name__ == '__main__':
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
 
     # Create the memmapped structured array of experience to be populated in parallel:
-    env = gym.make(args.environment)  # Make a dummy env to get shape info for observations.
-    if args.environment != 'PuddleWorld-v0':
-        env = env.env
+    env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info for observations.
     transition_dtype = np.dtype([('s_t', float, env.observation_space.shape), ('a_t', int), ('r_tp1', float), ('s_tp1', float, env.observation_space.shape), ('a_tp1', int), ('terminal', bool)])
     experience_memmap_path = str(experiment_path / 'experience.npy')
     if os.path.isfile(experience_memmap_path):

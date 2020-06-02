@@ -12,13 +12,13 @@ from joblib import Parallel, delayed
 
 
 def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
-    env = gym.make('MountainCar-v0').env if env is None else env
+    env = gym.make('MountainCar-v0').unwrapped if env is None else env
     g_t = 0.
-    indices_t = tc.indices(env.reset())
+    indices_t = tc.encode(env.reset())
     for t in range(num_timesteps):
         a_t = rng.choice(env.action_space.n, p=actor.pi(indices_t))
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
-        indices_t = tc.indices(s_tp1)
+        indices_t = tc.encode(s_tp1)
         g_t += r_tp1
         if terminal:
             break
@@ -46,9 +46,7 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
     else:
         # Set up the environment:
         import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
-        env = gym.make(args.environment)
-        if args.environment != 'PuddleWorld-v0':
-            env = env.env
+        env = gym.make(args.environment).unwrapped
         env.seed(random_seed)
         rng = env.np_random
         if args.objective == 'episodic':
@@ -61,7 +59,7 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
         num_tiles = configuration['num_tiles']
         num_tilings = configuration['num_tilings']
         bias_unit = configuration['bias_unit']
-        tc = TileCoder(env.observation_space.low, env.observation_space.high, num_tiles, num_tilings, num_features, bias_unit)
+        tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
 
         # Write the total rewards received to file:
         performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(actor, tc, env, rng)
@@ -97,7 +95,7 @@ if __name__ == '__main__':
     # Create the memmapped array of results to be populated in parallel:
     performance_memmap_path = str(experiment_path / '{}_performance.npy'.format(args.objective))
     if os.path.isfile(performance_memmap_path):
-        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='r+')
+        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
     else:
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
