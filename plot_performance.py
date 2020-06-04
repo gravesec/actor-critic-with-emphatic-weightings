@@ -78,4 +78,4 @@ if __name__ == '__main__':
     plt.xlabel('Timesteps')
     plt.ylabel('Total Reward')
     plt.ylim(-1000, 0)
-    plt.savefig('{}_performance'.format(args.objective))
+    plt.savefig(str(experiment_path / '{}_performance'.format(args.objective)))

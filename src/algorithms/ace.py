@@ -1,10 +1,7 @@
 import numpy as np
 
 
-# TODO: Implement action-value estimates instead of using TD error (which is higher variance due to the sampling of next states).
 # TODO: Derive and implement eligibility traces for actor?
-
-
 class LinearACE:
 
     def __init__(self, num_actions, num_features):
@@ -39,6 +36,7 @@ class LinearACE:
 class BinaryACE:
 
     def __init__(self, num_actions, num_features):
+        self.num_actions = num_actions
         self.theta = np.zeros((num_actions, num_features))
         self.F = 0.
         self.rho_tm1 = 1.
@@ -56,4 +54,13 @@ class BinaryACE:
         pi = self.pi(indices_t)
         for a in range(self.theta.shape[0]):
             self.theta[a, indices_t] += alpha_t * rho_t * M_t * delta_t * (1 - pi[a] if a == a_t else 0 - pi[a])
+        self.rho_tm1 = rho_t
+
+    def all_actions_learn(self, q_t, indices_t, gamma_t, i_t, eta_t, alpha_t, rho_t):
+        self.F = self.rho_tm1 * gamma_t * self.F + i_t
+        M_t = (1 - eta_t) * i_t + eta_t * self.F
+        pi = self.pi(indices_t)
+        for a in range(self.num_actions):
+            for b in range(self.num_actions):
+                self.theta[b, indices_t] += alpha_t * M_t * q_t[a] * pi[a] * (1 - pi[b] if b == a else 0 - pi[b])
         self.rho_tm1 = rho_t
