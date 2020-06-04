@@ -63,34 +63,41 @@ class TDCTests(unittest.TestCase):
         for run_num in tqdm(range(num_runs)):
             binary_agent = BinaryTDC(env.num_features, .01, .001, 0.9)
             linear_agent = LinearTDC(env.num_features, .01, .001, 0.9)
-            totdc_agent = BinaryTOTDC(env.num_actions, env.num_features, .01, 0.9)
+            totdc_agent = BinaryTOTDC(env.num_actions, env.num_features, .01, .01, 0.9)
             indices = env.indices()
             features = env.features()
             s_t = env.init()
             indices_t = indices[s_t]
             features_t = features[s_t]
+            a_t = np.random.choice(env.actions, p=env.mu[s_t])
             gamma_t = 0.
+            q_old = 0.
+            rho_tm1 = 1.
             for t in range(num_timesteps):
-                a_t = np.random.choice(env.actions, p=env.mu[s_t])
                 r_tp1, s_tp1 = env.sample(s_t, a_t)
                 if s_tp1 is None:
                     gamma_tp1 = 0.
                     s_tp1 = env.init()
                 else:
                     gamma_tp1 = env.gamma
+                a_tp1 = np.random.choice(env.actions, p=env.mu[s_tp1])
                 state_visit_counts[run_num, s_tp1] += 1
                 indices_tp1 = indices[s_tp1]
                 features_tp1 = features[s_tp1]
                 rho_t = env.rho[s_t, a_t]
                 binary_delta_t = r_tp1 + gamma_tp1 * binary_agent.estimate(indices_tp1) - binary_agent.estimate(indices_t)
-                linear_delta_t = r_tp1 + gamma_tp1 * linear_agent.estimate(features_tp1) - linear_agent.estimate(features_t)
                 binary_agent.learn(binary_delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+                linear_delta_t = r_tp1 + gamma_tp1 * linear_agent.estimate(features_tp1) - linear_agent.estimate(features_t)
                 linear_agent.learn(linear_delta_t, features_t, gamma_t, features_tp1, gamma_tp1, rho_t)
-                totdc_agent.learn(indices_t, a_t, gamma_t, rho_t, r_tp1, indices_tp1, gamma_tp1, env.pi)
+                q_tp1 = totdc_agent.estimate(indices_tp1, a_tp1)
+                totdc_delta_t = r_tp1 + gamma_tp1 * q_tp1 - totdc_agent.estimate(indices_t, a_t)
+                totdc_agent.learn(q_old, rho_tm1, totdc_delta_t, indices_t, a_t, gamma_t, rho_t, indices_tp1, a_tp1, gamma_tp1)
                 indices_t = indices_tp1
                 features_t = features_tp1
                 s_t = s_tp1
+                a_t = a_tp1
                 gamma_t = gamma_tp1
+                q_old = q_tp1
 
                 for state in range(Collision.num_states):
                     binary_estimated_state_values[run_num, t, state] = binary_agent.estimate(indices[state])

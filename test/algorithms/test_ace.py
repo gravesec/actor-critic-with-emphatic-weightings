@@ -144,7 +144,7 @@ class ACETests(unittest.TestCase):
         plt.savefig('total_rewards.png')
         # plt.show()
 
-        self.assertGreater(mean_rewards[-1], -250)
+        self.assertGreater(mean_rewards[-1], -300)
 
 
 if __name__ == '__main__':
