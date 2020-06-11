@@ -6,8 +6,9 @@ import itertools
 import numpy as np
 from pathlib import Path
 from src import utils
-from src.algorithms.ace import BinaryACE
-from src.algorithms.tdc import BinaryTDC
+from src.algorithms.fhat import BinaryFHat
+from src.algorithms.low_var_ace import BinaryLowVarACE
+from src.algorithms.low_var_etd import BinaryLowVarETD
 from src.function_approximation.tile_coder import TileCoder
 from joblib import Parallel, delayed
 
@@ -23,8 +24,8 @@ def run_low_var_ace(policies_memmap, experience_memmap, run_num, config_num, par
     tc_c = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles_c, num_tilings_c, bias_unit)
 
     fhat = BinaryFHat(tc_c.total_num_tiles, alpha_c2 / tc_c.num_active_features)
-    actor = BinaryLowVarACE(env.action_space.n, tc_a.total_num_tiles, fhat)
-    critic = BinaryLowVarETD(tc_c.total_num_tiles, alpha_c / tc.num_active_features, lambda_c, fhat)
+    actor = BinaryLowVarACE(env.action_space.n, tc_a.total_num_tiles)
+    critic = BinaryLowVarETD(tc_c.total_num_tiles, alpha_c / tc_c.num_active_features, lambda_c)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
@@ -33,7 +34,8 @@ def run_low_var_ace(policies_memmap, experience_memmap, run_num, config_num, par
 
     policies = np.zeros(num_policies, dtype=policy_dtype)
     gamma_t = 0.
-    indices_t = tc.encode(transitions[0][0])
+    indices_t_a = tc_a.encode(transitions[0][0])
+    indices_t_c = tc_c.encode(transitions[0][0])
     for t, transition in enumerate(transitions):
         if t % args.checkpoint_interval == 0:  # Save the learned policy if it's a checkpoint timestep:
             padded_weights = np.zeros_like(policies[t // args.checkpoint_interval][1])
@@ -43,34 +45,38 @@ def run_low_var_ace(policies_memmap, experience_memmap, run_num, config_num, par
         # Unpack the stored transition.
         s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
         gamma_tp1 = gamma if not terminal else 0  # Transition-dependent discounting.
-        indices_tp1 = tc.encode(s_tp1)
+        indices_tp1_a = tc_a.encode(s_tp1)
+        indices_tp1_c = tc_c.encode(s_tp1)
         i_t = i(s_t, gamma_t)
         i_tp1 = i(s_tp1, gamma_tp1)
         # Compute importance sampling ratio for the policy:
-        pi_t = actor.pi(indices_t)
+        pi_t = actor.pi(indices_t_a)
         mu_t = mu(s_t)
         rho_t = pi_t[a_t] / mu_t[a_t]
         # Compute TD error:
-        v_t = critic.estimate(indices_t)
-        v_tp1 = critic.estimate(indices_tp1)
+        v_t = critic.estimate(indices_t_c)
+        v_tp1 = critic.estimate(indices_tp1_c)
         delta_t = r_tp1 + gamma_tp1 * v_tp1 - v_t
 
+        F_t = fhat.estimate(indices_t_c)
+
         # Update actor:
-        actor.learn(gamma_t, i_t, eta, alpha_a / tc.num_active_features, rho_t, delta_t, indices_t, a_t)
+        actor.learn(gamma_t, i_t, eta, alpha_a / tc_a.num_active_features, rho_t, delta_t, indices_t_a, a_t, F_t)
         # Update critic:
-        critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+        critic.learn(delta_t, indices_t_c, gamma_t, i_t, indices_tp1_c, gamma_tp1, rho_t, F_t)
         # Update fhat: 
-        fhat.learn(indices_tp1, gamma_tp1, indices_t, rho_t, i_tp1)
+        fhat.learn(indices_tp1_c, gamma_tp1, indices_t_c, rho_t, i_tp1)
 
         gamma_t = gamma_tp1
-        indices_t = indices_tp1
+        indices_t_a = indices_tp1_a
+        indices_t_c = indices_tp1_c
 
     # Save the policy after the final timestep:
     padded_weights = np.zeros_like(policies[-1][1])
     padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
     policies[-1] = (t+1, padded_weights)
 
-    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles_a, num_tilings_a, num_tiles_c, num_tilings_c, tc.total_num_tiles, bias_unit, policies)  # Store the learned policies in the memmap.
+    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles_a, num_tilings_a, num_tiles_c, num_tilings_c, tc_a.total_num_tiles, tc_c.total_num_tiles, bias_unit, policies)  # Store the learned policies in the memmap.
 
 
 if __name__ == '__main__':
@@ -115,7 +121,7 @@ if __name__ == '__main__':
     policy_dtype = np.dtype(
         [
             ('timesteps', int),
-            ('weights', float, (env.action_space.n, max_num_features))
+            ('weights', float, (env.action_space.n, max_num_features_a))
         ]
     )
     configuration_dtype = np.dtype(
@@ -126,11 +132,12 @@ if __name__ == '__main__':
             ('alpha_c2', float),
             ('lambda_c', float),
             ('eta', float),
-            ('num_tiles_a', int, (2,)),
-            ('num_tilings_a', int),
+            ('num_tiles', int, (2,)),
+            ('num_tilings', int),
             ('num_tiles_c', int, (2,)),
             ('num_tilings_c', int),
             ('num_features', int),
+            ('num_features_c', int),
             ('bias_unit', bool),
             ('policies', policy_dtype, num_policies)
         ]
@@ -151,7 +158,7 @@ if __name__ == '__main__':
 
     # Run ACE for each configuration in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=args.verbosity)(
-        delayed(run_ace)(policies_memmap, experience_memmap, run_num, config_num, parameters)
+        delayed(run_low_var_ace)(policies_memmap, experience_memmap, run_num, config_num, parameters)
         for config_num, parameters in enumerate(configurations)
         for run_num in range(num_runs)
     )

@@ -4,22 +4,18 @@ import numpy as np
 # TODO: The linear one's probably based on an old implementation
 class LinearLowVarETD:
 
-    def __init__(self, num_features, alpha, lamda, fhat):
+    def __init__(self, num_features, alpha, lambda_c):
         self.num_features = num_features
 
         self.alpha = alpha
-        self.lamda = lamda
+        self.lambda_c = lambda_c
 
-        self.fhat = fhat
-
-        self.i = 1. # Fixed interest
         self.e = np.zeros(self.num_features)
         self.v = np.zeros(self.num_features)
 
-    def learn(self, delta_t, x_t, gamma_t, x_tp1, gamma_tp1, rho_t):
-        self.F = self.fhat.estimate(x_t)
-        M = self.lamda * self.i + (1. - self.lamda) * self.F
-        self.e = rho_t * (gamma_t * self.lamda * self.e + M * x_t)
+    def learn(self, delta_t, x_t, gamma_t, i_t, x_tp1, gamma_tp1, rho_t, F_t):
+        M = self.lambda_c * i_t + (1. - self.lambda_c) * F_t
+        self.e = rho_t * (gamma_t * self.lambda_c * self.e + M * x_t)
         self.v += self.alpha * delta_t * self.e
 
     def estimate(self, x):
@@ -28,13 +24,11 @@ class LinearLowVarETD:
 
 class BinaryLowVarETD:
 
-    def __init__(self, num_features, alpha_c, lambda_c, fhat, q_value_mode=False, num_action=None):
+    def __init__(self, num_features, alpha_c, lambda_c, q_value_mode=False, num_action=None):
         self.alpha_v = alpha_c
-        self.lamda_c = lamda_c
+        self.lambda_c = lambda_c
         self.e = np.zeros(num_features)
         self.v = np.zeros(num_features)
-
-        self.fhat = fhat
 
         self.q_value_mode = q_value_mode
         if self.q_value_mode:
@@ -44,19 +38,15 @@ class BinaryLowVarETD:
             self.e_q = np.zeros(temp_dim)
             self.v_q = np.zeros(temp_dim)
 
-    def learn(self, delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t, r_tp1=None, rho_tp1=None, a_t=None, a_tp1=None):
+    def learn(self, delta_t, indices_t, gamma_t, i_t, indices_tp1, gamma_tp1, rho_t, F_t, r_tp1=None, rho_tp1=None, a_t=None, a_tp1=None):
         if self.q_value_mode:
             delta_t = r_tp1 + gamma_tp1 * self.v[indices_tp1].sum() - self.v[indices_t].sum()
 
-        self.F = self.fhat.estimate(x_t)
-        M = self.lamda_c * self.i + (1. - self.lamda_c) * self.F
+        M = self.lambda_c * i_t + (1. - self.lambda_c) * F_t
 
         self.e *= rho_t * gamma_t * self.lambda_c
         self.e[indices_t] += M * rho_t
         self.v += self.alpha_v * delta_t * self.e
-
-        # # TODO: Should I keep this?!
-        # self.v[indices_tp1] -= self.alpha_v * gamma_tp1 * (1 - self.lambda_c) * self.e.dot(self.w)
 
         if self.q_value_mode:
             raise NotImplementedError

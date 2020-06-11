@@ -7,7 +7,6 @@ class FHat:
         self.num_features = num_features
 
         self.alpha = alpha
-        self.lamda = lamda
 
         self.f = np.zeros(self.num_features)
 
@@ -32,7 +31,6 @@ class BinaryFHat:
         self.num_features = num_features
 
         self.alpha = alpha
-        self.lamda = lamda
 
         self.f = np.zeros(self.num_features)
 
@@ -41,5 +39,5 @@ class BinaryFHat:
         delta_t = self.f[indices_t].sum() - target
         self.f[indices_t] += self.alpha * delta_t
 
-    def estimate(self, x):
+    def estimate(self, indices):
         return self.f[indices].sum()
