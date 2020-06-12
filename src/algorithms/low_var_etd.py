@@ -50,15 +50,7 @@ class BinaryLowVarETD:
 
         if self.q_value_mode:
             raise NotImplementedError
-            # indices_t_q = a_t * self.num_features + indices_t
-            # indices_tp1_q = a_tp1 * self.num_features + indices_tp1
-            # delta_t_q = r_tp1 + gamma_tp1 * rho_tp1 * self.v_q[indices_tp1_q].sum() - self.v_q[indices_t_q].sum()
-            # self.e_q *= rho_t * gamma_t * self.lambda_c
-            # self.e_q[indices_t_q] += 1
-            # self.v_q += self.alpha_v * delta_t_q * self.e_q
-            # self.v_q[indices_tp1_q] -= self.alpha_v * gamma_tp1 * (1 - self.lambda_c) * self.e_q.dot(self.w_q)
-            # self.w_q[indices_t_q] -= self.alpha_w * self.w_q[indices_t_q].sum()
-            # self.w_q += self.alpha_w * delta_t_q * self.e_q
+
 
     def estimate(self, indices, q_mode=False, a=None):
         if q_mode:
