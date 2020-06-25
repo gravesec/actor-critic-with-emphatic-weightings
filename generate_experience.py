@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to generate experience from the specified behaviour policy on the specified environment in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--num_runs', type=int, default=30, help='The number of independent runs of experience to generate')
+    parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=2937573853, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
@@ -71,17 +71,22 @@ if __name__ == '__main__':
 
     # Create the memmapped structured array of experience to be populated in parallel:
     env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info for observations.
-    transition_dtype = np.dtype([('s_t', float, env.observation_space.shape), ('a_t', int), ('r_tp1', float), ('s_tp1', float, env.observation_space.shape), ('a_tp1', int), ('terminal', bool)])
+    transition_dtype = np.dtype([
+        ('s_t', float, env.observation_space.shape),
+        ('a_t', int),
+        ('r_tp1', float),
+        ('s_tp1', float, env.observation_space.shape),
+        ('a_tp1', int),
+        ('terminal', bool)
+    ])
     experience_memmap_path = str(experiment_path / 'experience.npy')
     if os.path.isfile(experience_memmap_path):
-        experience_memmap = np.lib.format.open_memmap(experience_memmap_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='r+')
+        experience_memmap = np.lib.format.open_memmap(experience_memmap_path, mode='r+')
     else:
         experience_memmap = np.lib.format.open_memmap(experience_memmap_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
     Parallel(n_jobs=args.num_cpus, verbose=args.verbosity, backend=args.backend)(
-        delayed(generate_experience)(
-            experience_memmap, run_num, random_seed
-        )
+        delayed(generate_experience)(experience_memmap, run_num, random_seed)
         for run_num, random_seed in enumerate(random_seeds)
     )

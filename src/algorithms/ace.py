@@ -1,13 +1,10 @@
 import numpy as np
 
 
-# TODO: Derive and implement eligibility traces for actor?
 class LinearACE:
 
     def __init__(self, num_actions, num_features):
         self.theta = np.zeros((num_actions, num_features))
-        self.F = 0.
-        self.rho_tm1 = 1.
         self.psi_s_a = np.zeros((num_actions, num_features))
         self.psi_s_b = np.zeros((num_actions, num_features))
 
@@ -26,11 +23,9 @@ class LinearACE:
         self.psi_s_b[:] = features
         return self.psi_s_a - pi * self.psi_s_b
 
-    def learn(self, gamma_t, i_t, eta_t, alpha_t, rho_t, delta_t, features, a_t):
-        self.F = self.rho_tm1 * gamma_t * self.F + i_t
-        M_t = (1 - eta_t) * i_t + eta_t * self.F
+    def learn(self, i_t, eta_t, alpha_t, rho_t, delta_t, features, a_t, f_t):
+        M_t = (1 - eta_t) * i_t + eta_t * f_t
         self.theta += alpha_t * rho_t * M_t * delta_t * self.grad_log_pi(features, a_t)
-        self.rho_tm1 = rho_t
 
 
 class BinaryACE:
@@ -38,8 +33,6 @@ class BinaryACE:
     def __init__(self, num_actions, num_features):
         self.num_actions = num_actions
         self.theta = np.zeros((num_actions, num_features))
-        self.F = 0.
-        self.rho_tm1 = 1.
 
     def pi(self, indices):
         logits = self.theta[:, indices].sum(axis=1)
@@ -48,19 +41,15 @@ class BinaryACE:
         exp_logits = np.exp(logits)
         return exp_logits / np.sum(exp_logits)
 
-    def learn(self, gamma_t, i_t, eta_t, alpha_t, rho_t, delta_t, indices_t, a_t):
-        self.F = self.rho_tm1 * gamma_t * self.F + i_t
-        M_t = (1 - eta_t) * i_t + eta_t * self.F
+    def learn(self, i_t, eta_t, alpha_t, rho_t, delta_t, indices_t, a_t, f_t):
+        M_t = (1 - eta_t) * i_t + eta_t * f_t
         pi = self.pi(indices_t)
         for a in range(self.theta.shape[0]):
             self.theta[a, indices_t] += alpha_t * rho_t * M_t * delta_t * (1 - pi[a] if a == a_t else 0 - pi[a])
-        self.rho_tm1 = rho_t
 
-    def all_actions_learn(self, q_t, indices_t, gamma_t, i_t, eta_t, alpha_t, rho_t):
-        self.F = self.rho_tm1 * gamma_t * self.F + i_t
-        M_t = (1 - eta_t) * i_t + eta_t * self.F
+    def all_actions_learn(self, q_t, indices_t, i_t, eta_t, alpha_t, f_t):
+        M_t = (1 - eta_t) * i_t + eta_t * f_t
         pi = self.pi(indices_t)
         for a in range(self.num_actions):
             for b in range(self.num_actions):
                 self.theta[b, indices_t] += alpha_t * M_t * q_t[a] * pi[a] * (1 - pi[b] if b == a else 0 - pi[b])
-        self.rho_tm1 = rho_t

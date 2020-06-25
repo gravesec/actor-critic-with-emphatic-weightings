@@ -32,6 +32,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     gamma_t = 0.
     indices_t = tc.encode(transitions[0][0])
     q_old = 0.
+    f_t = 0.
     rho_tm1 = 1.
     for t, transition in enumerate(transitions):
         if t % args.checkpoint_interval == 0:  # Save the learned policy if it's a checkpoint timestep:
@@ -54,9 +55,12 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         critic.learn(q_old, rho_tm1, delta_t, indices_t, a_t, gamma_t, rho_t, indices_tp1, a_tp1, gamma_tp1)
         # pi_tp1 = actor.pi(indices_tp1)
         # critic.learn(indices_t, a_t, gamma_t, rho_t, r_tp1, indices_tp1, gamma_tp1, pi_tp1)
+
+        f_t = rho_tm1 * gamma_t * f_t + i_t
+
         # Update actor:
         q_t = critic.estimate(indices_t)
-        actor.all_actions_learn(q_t, indices_t, gamma_t, i_t, eta, alpha_a / tc.num_active_features, rho_t)
+        actor.all_actions_learn(q_t, indices_t, i_t, eta, alpha_a / tc.num_active_features, f_t)
 
         gamma_t = gamma_tp1
         indices_t = indices_tp1
@@ -75,7 +79,7 @@ if __name__ == '__main__':
 
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings) in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--experiment_name', type=str, default='aa_ace', help='The directory to read/write experiment files to/from')
+    parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
     parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')

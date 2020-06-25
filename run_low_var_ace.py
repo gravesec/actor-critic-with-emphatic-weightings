@@ -7,7 +7,7 @@ import numpy as np
 from pathlib import Path
 from src import utils
 from src.algorithms.fhat import BinaryFHat
-from src.algorithms.low_var_ace import BinaryLowVarACE
+from src.algorithms.ace import BinaryACE
 from src.algorithms.low_var_etd import BinaryLowVarETD
 from src.function_approximation.tile_coder import TileCoder
 from joblib import Parallel, delayed
@@ -24,7 +24,7 @@ def run_low_var_ace(policies_memmap, experience_memmap, run_num, config_num, par
     tc_c = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles_c, num_tilings_c, bias_unit)
 
     fhat = BinaryFHat(tc_c.total_num_tiles, alpha_c2 / tc_c.num_active_features)
-    actor = BinaryLowVarACE(env.action_space.n, tc_a.total_num_tiles)
+    actor = BinaryACE(env.action_space.n, tc_a.total_num_tiles)
     critic = BinaryLowVarETD(tc_c.total_num_tiles, alpha_c / tc_c.num_active_features, lambda_c)
 
     i = eval(args.interest_function)  # Create the interest function to use.
@@ -61,7 +61,7 @@ def run_low_var_ace(policies_memmap, experience_memmap, run_num, config_num, par
         F_t = fhat.estimate(indices_t_c)
 
         # Update actor:
-        actor.learn(gamma_t, i_t, eta, alpha_a / tc_a.num_active_features, rho_t, delta_t, indices_t_a, a_t, F_t)
+        actor.learn(i_t, eta, alpha_a / tc_a.num_active_features, rho_t, delta_t, indices_t_a, a_t, F_t)
         # Update critic:
         critic.learn(delta_t, indices_t_c, gamma_t, i_t, indices_tp1_c, gamma_tp1, rho_t, F_t)
         # Update fhat: 
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings) in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--experiment_name', type=str, default='tde_ace', help='The directory to read/write experiment files to/from')
+    parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
     parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
