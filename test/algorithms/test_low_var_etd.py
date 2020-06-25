@@ -60,7 +60,7 @@ class LowVarETDTests(unittest.TestCase):
         plt.xlabel('Timesteps')
         plt.ylabel('MSVE')
         plt.savefig('linear_toetd_collision.png')
-        self.assertLess(msve[-1], 0.4)
+        self.assertLess(msve[-1], 0.5)
 
     def test_binary_low_var_etd(self):
         env = Collision
@@ -113,7 +113,7 @@ class LowVarETDTests(unittest.TestCase):
         plt.xlabel('Timesteps')
         plt.ylabel('MSVE')
         plt.savefig('binary_toetd_collision.png')
-        self.assertLess(msve[-1], 0.4)
+        self.assertLess(msve[-1], 0.5)
 
 
 if __name__ == '__main__':
