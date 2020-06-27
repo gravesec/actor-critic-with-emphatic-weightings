@@ -2,22 +2,12 @@ import unittest
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-from src.algorithms.tdc import LinearTDC, BinaryTDC, BinaryTOTDC
+from src.algorithms.tdc import LinearTDC, BinaryTDC, BinaryGQ, BinaryTOGQ
 from src.environments.bairds_counterexample import BairdsCounterexample
 from src.environments.collision import Collision
 
 
 class TDCTests(unittest.TestCase):
-
-    def test_linear_tdc_simple(self):
-        tdc = LinearTDC(3, .1, .01, .99)
-        x_t = np.array([1, 0, 1])
-        v_0 = tdc.estimate(x_t)  # Initial estimate of value of x_t.
-        x_tp1 = np.array([0, 1, 1])
-        delta_t = 1  # next state was better than expected.
-        tdc.learn(delta_t, x_t, 1., x_tp1, 1., rho_t=1)
-        # New estimate of value of x_t should be higher than initial estimate:
-        self.assertGreater(tdc.estimate(x_t), v_0)
 
     def test_linear_tdc_bairds_counterexample(self):
         bce = BairdsCounterexample
@@ -44,10 +34,10 @@ class TDCTests(unittest.TestCase):
             mspbe[t] = bce.mspbe(tdc)
 
         plt.plot(mspbe, label='RMSPBE')
-        plt.title('Linear TDC on Baird\'s Counterexample')
+        plt.title('TDC on Baird\'s Counterexample')
         plt.xlabel('Timesteps')
         plt.ylabel('MSPBE')
-        plt.savefig('linear_tdc_bairds_counterexample.png')
+        plt.savefig('tdc_bairds_counterexample.png')
         self.assertLess(mspbe[-1], .1)
 
     def test_binary_tdc(self):
@@ -57,13 +47,15 @@ class TDCTests(unittest.TestCase):
         num_runs = 20
 
         state_visit_counts = np.zeros((num_runs, Collision.num_states))
-        binary_estimated_state_values = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
-        linear_estimated_state_values = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
-        totdc_estimated_state_values = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
+        btdc_vhat = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
+        ltdc_vhat = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
+        bgq_vhat = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
+        btogq_vhat = np.full((num_runs, num_timesteps, Collision.num_states), np.nan)
         for run_num in tqdm(range(num_runs)):
-            binary_agent = BinaryTDC(env.num_features, .01, .001, 0.9)
-            linear_agent = LinearTDC(env.num_features, .01, .001, 0.9)
-            totdc_agent = BinaryTOTDC(env.num_actions, env.num_features, .01, .01, 0.9)
+            btdc = BinaryTDC(env.num_features, .01, .001, 0.9)
+            ltdc = LinearTDC(env.num_features, .01, .001, 0.9)
+            bgq = BinaryGQ(env.num_actions, env.num_features, .01, .01, 0.9)
+            btogq = BinaryTOGQ(env.num_actions, env.num_features, .01, .01, 0.9)
             indices = env.indices()
             features = env.features()
             s_t = env.init()
@@ -85,13 +77,11 @@ class TDCTests(unittest.TestCase):
                 indices_tp1 = indices[s_tp1]
                 features_tp1 = features[s_tp1]
                 rho_t = env.rho[s_t, a_t]
-                binary_delta_t = r_tp1 + gamma_tp1 * binary_agent.estimate(indices_tp1) - binary_agent.estimate(indices_t)
-                binary_agent.learn(binary_delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
-                linear_delta_t = r_tp1 + gamma_tp1 * linear_agent.estimate(features_tp1) - linear_agent.estimate(features_t)
-                linear_agent.learn(linear_delta_t, features_t, gamma_t, features_tp1, gamma_tp1, rho_t)
-                q_tp1 = totdc_agent.estimate(indices_tp1, a_tp1)
-                totdc_delta_t = r_tp1 + gamma_tp1 * q_tp1 - totdc_agent.estimate(indices_t, a_t)
-                totdc_agent.learn(q_old, rho_tm1, totdc_delta_t, indices_t, a_t, gamma_t, rho_t, indices_tp1, a_tp1, gamma_tp1)
+                btdc.learn(r_tp1 + gamma_tp1 * btdc.estimate(indices_tp1) - btdc.estimate(indices_t), indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+                ltdc.learn(r_tp1 + gamma_tp1 * ltdc.estimate(features_tp1) - ltdc.estimate(features_t), features_t, gamma_t, features_tp1, gamma_tp1, rho_t)
+                bgq.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, env.pi, gamma_tp1)
+                q_tp1 = btogq.estimate(indices_tp1, a_tp1)
+                btogq.learn(q_old, rho_tm1, indices_t, a_t, gamma_t, rho_t, r_tp1, indices_tp1, env.pi, gamma_tp1)
                 indices_t = indices_tp1
                 features_t = features_tp1
                 s_t = s_tp1
@@ -100,23 +90,26 @@ class TDCTests(unittest.TestCase):
                 q_old = q_tp1
 
                 for state in range(Collision.num_states):
-                    binary_estimated_state_values[run_num, t, state] = binary_agent.estimate(indices[state])
-                    linear_estimated_state_values[run_num, t, state] = linear_agent.estimate(features[state])
-                    totdc_estimated_state_values[run_num, t, state] = totdc_agent.estimate(indices[state]).dot(env.pi)
+                    btdc_vhat[run_num, t, state] = btdc.estimate(indices[state])
+                    ltdc_vhat[run_num, t, state] = ltdc.estimate(features[state])
+                    bgq_vhat[run_num, t, state] = bgq.estimate(indices[state]).dot(env.pi)
+                    btogq_vhat[run_num, t, state] = btogq.estimate(indices[state]).dot(env.pi)
 
         d_mu = np.mean(state_visit_counts / num_timesteps, axis=0)
-        binary_msve = np.mean(np.sum(d_mu * np.square(binary_estimated_state_values - Collision.true_state_values), axis=2), axis=0)
-        linear_msve = np.mean(np.sum(d_mu * np.square(linear_estimated_state_values - Collision.true_state_values), axis=2), axis=0)
-        totdc_msve = np.mean(np.sum(d_mu * np.square(totdc_estimated_state_values - Collision.true_state_values), axis=2), axis=0)
-        plt.plot(binary_msve, label='BinaryTDC')
-        plt.plot(linear_msve, label='LinearTDC')
-        plt.plot(totdc_msve, label='TOTDC')
+        btdc_msve = np.mean(np.sum(d_mu * np.square(btdc_vhat - Collision.true_state_values), axis=2), axis=0)
+        ltdc_msve = np.mean(np.sum(d_mu * np.square(ltdc_vhat - Collision.true_state_values), axis=2), axis=0)
+        bgq_msve = np.mean(np.sum(d_mu * np.square(bgq_vhat - Collision.true_state_values), axis=2), axis=0)
+        btogq_msve = np.mean(np.sum(d_mu * np.square(btogq_vhat - Collision.true_state_values), axis=2), axis=0)
+        plt.plot(btdc_msve, label='BinaryTDC')
+        plt.plot(ltdc_msve, label='LinearTDC')
+        plt.plot(bgq_msve, label='BinaryGQ')
+        plt.plot(btogq_msve, label='BinaryTOGQ')
         plt.title('TDC variants on the Collision problem')
         plt.xlabel('Timesteps')
         plt.ylabel('MSVE')
         plt.legend()
         plt.savefig('tdc_collision.png')
-        np.testing.assert_almost_equal(binary_msve, linear_msve, .009)
+        np.testing.assert_almost_equal(btdc_msve, ltdc_msve, .009)
 
 
 if __name__ == '__main__':

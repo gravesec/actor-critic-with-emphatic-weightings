@@ -83,7 +83,7 @@ class ACETests(unittest.TestCase):
         num_runs = 2
         num_timesteps = 5000
         evaluation_interval = 1000
-        num_evaluation_runs = 1
+        num_evaluation_runs = 10
         rewards = np.zeros((num_runs, num_timesteps // evaluation_interval + 1, num_evaluation_runs))
         alpha_a = .001
         alpha_c = .05
@@ -140,14 +140,14 @@ class ACETests(unittest.TestCase):
         plt.xlabel('Timesteps')
         plt.ylabel('Total Reward')
         plt.ylim(-1000, 0)
-        plt.savefig('total_rewards.png')
-        self.assertGreater(mean_rewards[-1], -200)
+        plt.savefig('binary_ace_off_policy.png')
+        self.assertGreater(mean_rewards[-1], -300)
 
     def test_low_variance_binary_ace_off_policy(self):
         num_runs = 2
         num_timesteps = 5000
         evaluation_interval = 1000
-        num_evaluation_runs = 1
+        num_evaluation_runs = 10
         rewards = np.zeros((num_runs, num_timesteps // evaluation_interval + 1, num_evaluation_runs))
         alpha_a = .01
         alpha_c = .05
@@ -202,7 +202,7 @@ class ACETests(unittest.TestCase):
         plt.xlabel('Timesteps')
         plt.ylabel('Total Reward')
         plt.ylim(-1000, 0)
-        plt.savefig('total_rewards.png')
+        plt.savefig('low_variance_binary_ace_off_policy.png')
         self.assertGreater(mean_rewards[-1], -300)
 
 

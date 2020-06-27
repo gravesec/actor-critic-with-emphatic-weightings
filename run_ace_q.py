@@ -7,7 +7,7 @@ import numpy as np
 from pathlib import Path
 from src import utils
 from src.algorithms.ace import BinaryACE
-from src.algorithms.tdc import BinaryTOTDC
+from src.algorithms.tdc import BinaryGQ
 from src.function_approximation.tile_coder import TileCoder
 from joblib import Parallel, delayed
 
@@ -21,17 +21,13 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
 
     tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
     actor = BinaryACE(env.action_space.n, tc.total_num_tiles)
-    critic = BinaryTOTDC(env.action_space.n, tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
-
+    critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
-
     transitions = experience_memmap[run_num]
-
     policies = np.zeros(num_policies, dtype=policy_dtype)
     gamma_t = 0.
     indices_t = tc.encode(transitions[0][0])
-    q_old = 0.
     f_t = 0.
     rho_tm1 = 1.
     for t, transition in enumerate(transitions):
@@ -41,7 +37,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
             policies[t // args.checkpoint_interval] = (t, padded_weights)
 
         # Unpack the stored transition.
-        s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
+        s_t, a_t, r_tp1, s_tp1, _, terminal = transition
         gamma_tp1 = gamma if not terminal else 0  # Transition-dependent discounting.
         indices_tp1 = tc.encode(s_tp1)
         i_t = i(s_t, gamma_t)
@@ -50,21 +46,14 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         mu_t = mu(s_t)
         rho_t = pi_t[a_t] / mu_t[a_t]
         # Update critic:
-        q_tp1 = critic.estimate(indices_tp1, a_tp1)
-        delta_t = r_tp1 + gamma_tp1 * q_tp1 - critic.estimate(indices_t, a_t)
-        critic.learn(q_old, rho_tm1, delta_t, indices_t, a_t, gamma_t, rho_t, indices_tp1, a_tp1, gamma_tp1)
-        # pi_tp1 = actor.pi(indices_tp1)
-        # critic.learn(indices_t, a_t, gamma_t, rho_t, r_tp1, indices_tp1, gamma_tp1, pi_tp1)
-
-        f_t = rho_tm1 * gamma_t * f_t + i_t
-
+        critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
         # Update actor:
+        f_t = rho_tm1 * gamma_t * f_t + i_t
         q_t = critic.estimate(indices_t)
         actor.all_actions_learn(q_t, indices_t, i_t, eta, alpha_a / tc.num_active_features, f_t)
 
         gamma_t = gamma_tp1
         indices_t = indices_tp1
-        q_old = q_tp1
         rho_tm1 = rho_t
 
     # Save the policy after the final timestep:
@@ -80,7 +69,7 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings) in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--verbosity', type=int, default=51, help='Controls how verbose the joblib progress reporting is. 0 for none, 51 for all iterations to stdout.')
@@ -90,9 +79,9 @@ if __name__ == '__main__':
     parser.add_argument('--run_mode', type=str, choices=['combinations', 'corresponding'], default='combinations', help='Whether to run all combinations of given parameters, or only corresponding parameters')
     parser.add_argument('--gamma', '--discount_rate', type=float, nargs='+', default=[.99], help='Discount rate.')
     parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', default=[.1], help='Step sizes for the actor.')
-    parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', default=[.5], help='Step sizes for the critic.')
+    parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', default=[.2], help='Step sizes for the critic.')
     parser.add_argument('--alpha_c2', '--critic_step_sizes_2', type=float, nargs='+', default=[.01], help='Step sizes for the second set of weights in the GTD critic.')
-    parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[.0], help='Trace decay rates for the critic.')
+    parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[.5], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', '--offpac_ace_tradeoff', type=float, nargs='+', default=[0.], help='Values for the parameter that interpolates between OffPAC (0) and ACE (1).')
     parser.add_argument('--num_tiles', type=int, nargs='+', action='append', default=[[5, 5]], help='The number of tiles per dimension to use in the tile coder.')
     parser.add_argument('--num_tilings', type=int, nargs='+', default=[8], help='The number of tilings to use in the tile coder.')

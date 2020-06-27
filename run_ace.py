@@ -22,12 +22,9 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
     actor = BinaryACE(env.action_space.n, tc.total_num_tiles)
     critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
-
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
-
     transitions = experience_memmap[run_num]
-
     policies = np.zeros(num_policies, dtype=policy_dtype)
     gamma_t = 0.
     indices_t = tc.encode(transitions[0][0])
@@ -77,7 +74,7 @@ if __name__ == '__main__':
     # Parse command line arguments:
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings) in parallel.', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--verbosity', type=int, default=51, help='Controls how verbose the joblib progress reporting is. 0 for none, 51 for all iterations to stdout.')

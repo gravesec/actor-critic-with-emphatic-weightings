@@ -33,13 +33,13 @@ class BinaryACE:
     def __init__(self, num_actions, num_features):
         self.num_actions = num_actions
         self.theta = np.zeros((num_actions, num_features))
+        self.grad_log_pi = np.zeros((num_actions, num_features))
 
     def pi(self, indices):
-        logits = self.theta[:, indices].sum(axis=1)
-        # Converts potential overflows of the largest probability into underflows of the lowest probability:
-        logits = logits - logits.max()
-        exp_logits = np.exp(logits)
-        return exp_logits / np.sum(exp_logits)
+        preferences = self.theta[:, indices].sum(axis=1)
+        preferences = preferences - preferences.max()  # Converts potential overflows of the largest probability into underflows of the lowest probability.
+        exp_preferences = np.exp(preferences)
+        return exp_preferences / np.sum(exp_preferences)
 
     def learn(self, i_t, eta_t, alpha_t, rho_t, delta_t, indices_t, a_t, f_t):
         M_t = (1 - eta_t) * i_t + eta_t * f_t
@@ -52,4 +52,6 @@ class BinaryACE:
         pi = self.pi(indices_t)
         for a in range(self.num_actions):
             for b in range(self.num_actions):
-                self.theta[b, indices_t] += alpha_t * M_t * q_t[a] * pi[a] * (1 - pi[b] if b == a else 0 - pi[b])
+                self.grad_log_pi[b, indices_t] += (1 - pi[b] if b == a else 0 - pi[b])
+            self.theta += alpha_t * M_t * q_t[a] * pi[a] * self.grad_log_pi  # Update policy weights.
+            self.grad_log_pi.fill(0.)  # Clear grad log pi for next iteration.
