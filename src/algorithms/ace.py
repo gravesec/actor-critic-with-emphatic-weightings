@@ -46,7 +46,7 @@ class BinaryACE:
         return exp_preferences / np.sum(exp_preferences)
 
     def learn(self, indices_t, a_t, delta_t, m_t, rho_t):
-    #     M_t = (1 - eta_t) * i_t + eta_t * f_t
+    #     M_t = (1 - eta) * i_t + eta * f_t
         pi = self.pi(indices_t)
         for a in range(self.theta.shape[0]):
             self.theta[a, indices_t] += self.alpha * rho_t * m_t * delta_t * (1 - pi[a] if a == a_t else 0 - pi[a])

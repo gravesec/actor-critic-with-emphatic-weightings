@@ -126,7 +126,7 @@ class ACETests(unittest.TestCase):
         # ACE parameters:
         alpha_a = .0005
         alpha_c = .1
-        alpha_w = .0005
+        alpha_c2 = .0005
         lambda_c = 0.
         eta = 1.
         i = lambda g=1: 1.  # Uniform interest.
@@ -134,7 +134,7 @@ class ACETests(unittest.TestCase):
         # OffPAC parameters:
         # alpha_a = .01
         # alpha_c = .01
-        # alpha_w = .00005
+        # alpha_c2 = .00005
         # lambda_c = .4
         # eta = 0.
         # i = lambda g=1: 1.  # Uniform interest.
@@ -148,7 +148,7 @@ class ACETests(unittest.TestCase):
         for run_num in range(num_runs):
             tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, [5, 5], 8, True)
             actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
-            critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_w / tc.num_active_features, lambda_c)
+            critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
 
             mu = np.ones(env.action_space.n) / env.action_space.n  # Uniform random policy.
             gamma_t = 0.
@@ -190,7 +190,7 @@ class ACETests(unittest.TestCase):
         ax = fig.add_subplot(111)
         x = np.array([evaluation_interval*i for i in range(num_timesteps // evaluation_interval + 1)])
         confs = sem_rewards * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
-        label = f'$\\alpha_a$:{alpha_a}, $\\alpha_c$:{alpha_c}, $\\alpha_w$:{alpha_w}, $\\lambda_c$:{lambda_c}, $\\eta$:{eta}{"(OffPAC)" if eta==0. else ""}'
+        label = f'$\\alpha_a$:{alpha_a}, $\\alpha_c$:{alpha_c}, $\\alpha_c2$:{alpha_c2}, $\\lambda_c$:{lambda_c}, $\\eta$:{eta}{"(OffPAC)" if eta==0. else ""}'
         ax.errorbar(x, mean_rewards, yerr=[confs, confs], label=label)
         plt.legend(loc='lower right')
         plt.title('Mountain Car (off-policy)')
@@ -206,32 +206,31 @@ class ACETests(unittest.TestCase):
         rng = env.np_random
 
         # ACE parameters:
-        # alpha_a = .00005
-        # alpha_c = .01
-        # alpha_w = .00005
-        # lambda_c = 0.
-        # eta = 1.
-        # i = lambda g=1: 1.  # Uniform interest.
-        # num_timesteps = 20000
+        alpha_a = .001
+        alpha_c = .1
+        alpha_c2 = .0001
+        lambda_c = .4
+        eta = 1.
+        i = lambda g=1: 1.  # Uniform interest.
 
         # OffPAC parameters:
-        alpha_a = .01
-        alpha_c = .01
-        alpha_w = .00005
-        lambda_c = .4
-        eta = 0.
-        i = lambda g=1: 1.  # Uniform interest.
-        num_timesteps = 20000
+        # alpha_a = .01
+        # alpha_c = .01
+        # alpha_c2 = .00005
+        # lambda_c = .1
+        # eta = 0.
+        # i = lambda g=1: 1.  # Uniform interest.
 
         gamma = 1.
         num_runs = 1
+        num_timesteps = 20000
         evaluation_interval = 1000
         num_evaluation_runs = 10
         rewards = np.zeros((num_runs, num_timesteps // evaluation_interval + 1, num_evaluation_runs))
         for run_num in range(num_runs):
             tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, [5, 5], 8, True)
-            actor = BinaryACE(env.action_space.n, tc.total_num_tiles)
-            critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_w / tc.num_active_features, lambda_c)
+            actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
+            critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
 
             mu = np.ones(env.action_space.n) / env.action_space.n  # Uniform random policy.
             gamma_t = 0.
@@ -246,11 +245,11 @@ class ACETests(unittest.TestCase):
                 gamma_tp1 = 0. if terminal else gamma
                 indices_tp1 = tc.encode(s_tp1)
                 rho_t = actor.pi(indices_t)[a_t] / mu[a_t]
-                delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
                 critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
                 i_t = i(gamma_t)
                 f_t = rho_tm1 * gamma_t * f_t + i_t
-                actor.all_actions_learn(critic.estimate(indices_t), indices_t, i_t, eta, alpha_a / tc.num_active_features, f_t)
+                m_t = (1 - eta) * i_t + eta * f_t
+                actor.all_actions_learn(indices_t, critic.estimate(indices_t), m_t)
                 gamma_t = gamma_tp1
                 indices_t = indices_tp1
                 rho_tm1 = rho_t
@@ -272,7 +271,7 @@ class ACETests(unittest.TestCase):
         ax = fig.add_subplot(111)
         x = np.array([evaluation_interval*i for i in range(num_timesteps // evaluation_interval + 1)])
         confs = sem_rewards * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
-        label = f'$\\alpha_a$:{alpha_a}, $\\alpha_c$:{alpha_c}, $\\alpha_w$:{alpha_w}, $\\lambda_c$:{lambda_c}, $\\eta$:{eta}{"(OffPAC)" if eta==0. else ""}'
+        label = f'$\\alpha_a$:{alpha_a}, $\\alpha_c$:{alpha_c}, $\\alpha_c2$:{alpha_c2}, $\\lambda_c$:{lambda_c}, $\\eta$:{eta}{"(OffPAC)" if eta==0. else ""}'
         ax.errorbar(x, mean_rewards, yerr=[confs, confs], label=label)
         plt.legend(loc='lower right')
         plt.title('Mountain Car (off-policy)')
@@ -284,22 +283,24 @@ class ACETests(unittest.TestCase):
 
     def test_low_variance_binary_ace_off_policy(self):
         env = gym.make('MountainCar-v0').unwrapped
-        env.seed(1202470738)
+        env.seed(278422227)
         rng = env.np_random
 
         # ACE parameters:
-        alpha_a = .001
-        alpha_c = .01
-        alpha_w = .0005
+        alpha_a = .0005
+        alpha_c = .1
+        alpha_c2 = .0005
         lambda_c = 0.
+        alpha_f = .1
         eta = 1.
         i = lambda g=1: 1.  # Uniform interest.
 
         # OffPAC parameters:
         # alpha_a = .01
         # alpha_c = .01
-        # alpha_w = .00005
+        # alpha_c2 = .00005
         # lambda_c = .4
+        # alpha_f = .01
         # eta = 0.
         # i = lambda g=1: 1.  # Uniform interest.
 
@@ -312,13 +313,11 @@ class ACETests(unittest.TestCase):
         for run_num in range(num_runs):
             tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, [5, 5], 8, True)
             actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
-            critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_w / tc.num_active_features, lambda_c)
-            fhat = BinaryFHat(tc.total_num_tiles, .1)
+            critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
+            fhat = BinaryFHat(tc.total_num_tiles, alpha_f)
 
             mu = np.ones(env.action_space.n) / env.action_space.n  # Uniform random policy.
             gamma_t = 0.
-            f_t = 1.
-            rho_tm1 = 1.
             indices_t = tc.encode(env.reset())
             for t in tqdm(range(num_timesteps)):
                 if t % evaluation_interval == 0:
@@ -334,14 +333,12 @@ class ACETests(unittest.TestCase):
                 f_t = fhat.estimate(indices_t)
                 m_t = (1 - eta) * i_t + eta * f_t
                 actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
+                fhat.learn(indices_tp1, gamma_tp1, indices_t, rho_t, i_t)
                 gamma_t = gamma_tp1
                 indices_t = indices_tp1
-                rho_tm1 = rho_t
 
                 if terminal:
                     gamma_t = 0.
-                    f_t = 1.
-                    rho_tm1 = 1.
                     s_tp1 = env.reset()
 
             rewards[run_num, -1] = Parallel(n_jobs=-1)(delayed(evaluate_policy)(actor, tc, num_timesteps=1000) for _ in range(num_evaluation_runs))
@@ -355,7 +352,7 @@ class ACETests(unittest.TestCase):
         ax = fig.add_subplot(111)
         x = np.array([evaluation_interval*i for i in range(num_timesteps // evaluation_interval + 1)])
         confs = sem_rewards * st.t.ppf((1.0 + 0.95) / 2, num_evaluation_runs - 1)
-        label = f'$\\alpha_a$:{alpha_a}, $\\alpha_c$:{alpha_c}, $\\alpha_w$:{alpha_w}, $\\lambda_c$:{lambda_c}, $\\eta$:{eta}{"(OffPAC)" if eta==0. else ""}'
+        label = f'$\\alpha_a$:{alpha_a}, $\\alpha_c$:{alpha_c}, $\\alpha_c2$:{alpha_c2}, $\\lambda_c$:{lambda_c}, $\\eta$:{eta}{"(OffPAC)" if eta==0. else ""}'
         ax.errorbar(x, mean_rewards, yerr=[confs, confs], label=label)
         plt.legend(loc='lower right')
         plt.title('Mountain Car (off-policy)')
