@@ -20,7 +20,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
 
     tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
-    actor = BinaryACE(env.action_space.n, tc.total_num_tiles)
+    actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
     critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
@@ -48,9 +48,10 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         # Update critic:
         critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
         # Update actor:
-        f_t = rho_tm1 * gamma_t * f_t + i_t
         q_t = critic.estimate(indices_t)
-        actor.all_actions_learn(q_t, indices_t, i_t, eta, alpha_a / tc.num_active_features, f_t)
+        f_t = rho_tm1 * gamma_t * f_t + i_t
+        m_t = (1 - eta) * i_t + eta * f_t
+        actor.all_actions_learn(indices_t, q_t, m_t)
 
         gamma_t = gamma_tp1
         indices_t = indices_tp1
@@ -78,10 +79,10 @@ if __name__ == '__main__':
     parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to run ACE on.')
     parser.add_argument('--run_mode', type=str, choices=['combinations', 'corresponding'], default='combinations', help='Whether to run all combinations of given parameters, or only corresponding parameters')
     parser.add_argument('--gamma', '--discount_rate', type=float, nargs='+', default=[.99], help='Discount rate.')
-    parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', default=[.1], help='Step sizes for the actor.')
-    parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', default=[.2], help='Step sizes for the critic.')
+    parser.add_argument('--alpha_a', '--actor_step_sizes', type=float, nargs='+', default=[.05], help='Step sizes for the actor.')
+    parser.add_argument('--alpha_c', '--critic_step_sizes', type=float, nargs='+', default=[.1], help='Step sizes for the critic.')
     parser.add_argument('--alpha_c2', '--critic_step_sizes_2', type=float, nargs='+', default=[.01], help='Step sizes for the second set of weights in the GTD critic.')
-    parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[.5], help='Trace decay rates for the critic.')
+    parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[.1], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', '--offpac_ace_tradeoff', type=float, nargs='+', default=[0.], help='Values for the parameter that interpolates between OffPAC (0) and ACE (1).')
     parser.add_argument('--num_tiles', type=int, nargs='+', action='append', default=[[5, 5]], help='The number of tiles per dimension to use in the tile coder.')
     parser.add_argument('--num_tilings', type=int, nargs='+', default=[8], help='The number of tilings to use in the tile coder.')

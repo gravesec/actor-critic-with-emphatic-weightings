@@ -20,7 +20,7 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
 
     tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
-    actor = BinaryACE(env.action_space.n, tc.total_num_tiles)
+    actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
     critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
@@ -45,17 +45,15 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
         pi_t = actor.pi(indices_t)
         mu_t = mu(s_t)
         rho_t = pi_t[a_t] / mu_t[a_t]
-        # Compute TD error:
+        # Update the critic:
         v_t = critic.estimate(indices_t)
         v_tp1 = critic.estimate(indices_tp1)
         delta_t = r_tp1 + gamma_tp1 * v_tp1 - v_t
-
-        f_t = rho_tm1 * gamma_t * f_t + i_t
-
-        # Update actor:
-        actor.learn(i_t, eta, alpha_a / tc.num_active_features, rho_t, delta_t, indices_t, a_t, f_t)
-        # Update critic:
         critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+        # Update the actor:
+        f_t = rho_tm1 * gamma_t * f_t + i_t
+        m_t = (1 - eta) * i_t + eta * f_t
+        actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
 
         gamma_t = gamma_tp1
         indices_t = indices_tp1

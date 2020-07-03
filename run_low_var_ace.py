@@ -58,12 +58,12 @@ def run_low_var_ace(policies_memmap, experience_memmap, run_num, config_num, par
         v_tp1 = critic.estimate(indices_tp1_c)
         delta_t = r_tp1 + gamma_tp1 * v_tp1 - v_t
 
-        F_t = fhat.estimate(indices_t_c)
-
+        f_t = fhat.estimate(indices_t_c)
+        m_t = (1 - eta) * i_t + eta * f_t
         # Update actor:
-        actor.learn(i_t, eta, alpha_a / tc_a.num_active_features, rho_t, delta_t, indices_t_a, a_t, F_t)
+        actor.learn(indices_t_a, a_t, delta_t, m_t, rho_t)
         # Update critic:
-        critic.learn(delta_t, indices_t_c, gamma_t, i_t, indices_tp1_c, gamma_tp1, rho_t, F_t)
+        critic.learn(delta_t, indices_t_c, gamma_t, i_t, indices_tp1_c, gamma_tp1, rho_t, f_t)
         # Update fhat: 
         fhat.learn(indices_tp1_c, gamma_tp1, indices_t_c, rho_t, i_tp1)
 
