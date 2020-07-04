@@ -19,9 +19,9 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     if np.count_nonzero(policies_memmap[run_num, config_num]) != 0:
         return
 
-    gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, bias_unit = parameters
+    gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles_per_dim, num_tilings, bias_unit = parameters
 
-    tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
+    tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles_per_dim, num_tilings, bias_unit)
     actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
     critic = BinaryTDC(tc.total_num_tiles, alpha_c / tc.num_active_features, alpha_c2 / tc.num_active_features, lambda_c)
     i = eval(args.interest_function)  # Create the interest function to use.
@@ -66,7 +66,8 @@ def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters)
     padded_weights[0:actor.theta.shape[0], 0:actor.theta.shape[1]] = np.copy(actor.theta)
     policies[-1] = (t+1, padded_weights)
 
-    policies_memmap[run_num, config_num] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles, num_tilings, tc.total_num_tiles, bias_unit, policies)  # Store the learned policies in the memmap.
+    policies_memmap[run_num, config_num]['parameters'] = (gamma, alpha_a, alpha_c, alpha_c2, lambda_c, eta, num_tiles_per_dim, num_tilings, tc.total_num_tiles, bias_unit)
+    policies_memmap[run_num, config_num]['policies'] = policies
 
 
 if __name__ == '__main__':
@@ -87,7 +88,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha_c2', '--critic_step_sizes_2', type=float, nargs='+', default=[.001], help='Step sizes for the second set of weights in the GTD critic.')
     parser.add_argument('--lambda_c', '--critic_trace_decay_rates', type=float, nargs='+', default=[0.], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', '--offpac_ace_tradeoff', type=float, nargs='+', default=[0.], help='Values for the parameter that interpolates between OffPAC (0) and ACE (1).')
-    parser.add_argument('--num_tiles', type=int, nargs='+', action='append', default=[[5, 5]], help='The number of tiles per dimension to use in the tile coder.')
+    parser.add_argument('--num_tiles_per_dim', type=int, nargs='+', action='append', default=[[5, 5]], help='The number of tiles per dimension to use in the tile coder.')
     parser.add_argument('--num_tilings', type=int, nargs='+', default=[8], help='The number of tilings to use in the tile coder.')
     parser.add_argument('--bias_unit', type=int, nargs='+', default=[1], help='Whether or not to include a bias unit in the tile coder.')
     args = parser.parse_args()
@@ -103,29 +104,28 @@ if __name__ == '__main__':
     # Create the memmapped array of learned policies that will be populated in parallel:
     env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
     num_policies = num_timesteps // args.checkpoint_interval + 1
-    max_num_features = np.max(args.num_tilings * np.prod(np.array(args.num_tiles), axis=1) + np.max(args.bias_unit))
-    policy_dtype = np.dtype(
-        [
+    max_num_features = np.max(args.num_tilings * np.prod(np.array(args.num_tiles_per_dim), axis=1) + np.max(args.bias_unit))
+    policy_dtype = np.dtype([
             ('timesteps', int),
             ('weights', float, (env.action_space.n, max_num_features))
-        ]
-    )
-    configuration_dtype = np.dtype(
-        [
-            ('gamma', float),
-            ('alpha_a', float),
-            ('alpha_c', float),
-            ('alpha_c2', float),
-            ('lambda_c', float),
-            ('eta', float),
-            ('num_tiles', int, (2,)),
-            ('num_tilings', int),
-            ('num_features', int),
-            ('bias_unit', bool),
-            ('policies', policy_dtype, num_policies)
-        ]
-    )
-    parameters = [args.gamma, args.alpha_a, args.alpha_c, args.alpha_c2, args.lambda_c, args.eta, args.num_tiles, args.num_tilings, args.bias_unit]
+    ])
+    parameters_dtype = np.dtype([
+        ('alpha_a', float),
+        ('alpha_c', float),
+        ('alpha_c2', float),
+        ('lambda_c', float),
+        ('eta', float),
+        ('gamma', float),
+        ('num_tiles_per_dim', int, (2,)),
+        ('num_tilings', int),
+        ('num_features', int),
+        ('bias_unit', bool),
+    ])
+    configuration_dtype = np.dtype([
+        ('parameters', parameters_dtype),
+        ('policies', policy_dtype, num_policies)
+    ])
+    parameters = [args.gamma, args.alpha_a, args.alpha_c, args.alpha_c2, args.lambda_c, args.eta, args.num_tiles_per_dim, args.num_tilings, args.bias_unit]
     if args.run_mode == 'corresponding':
         assert all(len(parameter) == len(args.alpha_a) for parameter in parameters)
         configurations = list(zip(*parameters))  # Transpose parameters list.

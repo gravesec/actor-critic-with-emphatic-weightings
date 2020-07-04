@@ -35,7 +35,7 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
 
     # Load the policy to evaluate:
     configuration = policies_memmap[ace_run_num, config_num]
-    num_features = configuration['num_features']
+    num_features = configuration['parameters']['num_features']
     policy = configuration['policies'][policy_num]
     weights = policy['weights'][:, :num_features]  # trim potential padding.
     actor = BinaryACE(weights.shape[0], weights.shape[1])
