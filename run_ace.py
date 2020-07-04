@@ -4,12 +4,14 @@ import gym_puddle
 import argparse
 import itertools
 import numpy as np
-from pathlib import Path
 from src import utils
+from tqdm import tqdm
+from pathlib import Path
+from src.utils import tqdm_joblib
+from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
-from joblib import Parallel, delayed
 
 
 def run_ace(policies_memmap, experience_memmap, run_num, config_num, parameters):
@@ -75,7 +77,6 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
-    parser.add_argument('--verbosity', type=int, default=51, help='Controls how verbose the joblib progress reporting is. 0 for none, 51 for all iterations to stdout.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to run ACE on.')
@@ -139,8 +140,9 @@ if __name__ == '__main__':
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, shape=(num_runs, num_configurations), dtype=configuration_dtype, mode='w+')
 
     # Run ACE for each configuration in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=args.verbosity)(
-        delayed(run_ace)(policies_memmap, experience_memmap, run_num, config_num, parameters)
-        for config_num, parameters in enumerate(configurations)
-        for run_num in range(num_runs)
-    )
+    with tqdm_joblib(tqdm(total=num_runs * len(configurations))) as progress_bar:
+        Parallel(n_jobs=args.num_cpus, verbose=0)(
+            delayed(run_ace)(policies_memmap, experience_memmap, run_num, config_num, parameters)
+            for config_num, parameters in enumerate(configurations)
+            for run_num in range(num_runs)
+        )

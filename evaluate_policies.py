@@ -5,7 +5,9 @@ import random
 import argparse
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 from src import utils
+from src.utils import tqdm_joblib
 from src.algorithms.ace import BinaryACE
 from src.function_approximation.tile_coder import TileCoder
 from joblib import Parallel, delayed
@@ -75,7 +77,6 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
     parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
-    parser.add_argument('--verbosity', type=int, default=51, help='Controls how verbose the joblib progress reporting is. 0 for none, 51 for all iterations to stdout.')
     parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: environment start state.)')
     parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to evaluate the learned policies on.')
     args = parser.parse_args()
@@ -100,13 +101,14 @@ if __name__ == '__main__':
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
 
     # Evaluate the learned policies in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=args.verbosity, backend=args.backend)(
-        delayed(evaluate_policies)(
-            performance_memmap, policies_memmap,
-            evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
+    with tqdm_joblib(tqdm(total=args.num_evaluation_runs * num_ace_runs * num_configurations * num_policies)) as progress_bar:
+        Parallel(n_jobs=args.num_cpus, verbose=0, backend=args.backend)(
+            delayed(evaluate_policies)(
+                performance_memmap, policies_memmap,
+                evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
+            )
+            for evaluation_run_num, random_seed in enumerate(random_seeds)
+            for ace_run_num in range(num_ace_runs)
+            for config_num in range(num_configurations)
+            for policy_num in range(num_policies)
         )
-        for evaluation_run_num, random_seed in enumerate(random_seeds)
-        for ace_run_num in range(num_ace_runs)
-        for config_num in range(num_configurations)
-        for policy_num in range(num_policies)
-    )
