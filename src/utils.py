@@ -22,11 +22,11 @@ def save_args_to_file(args, args_file_path):
     os.makedirs(args_file_path.parent, exist_ok=True)
     with open(args_file_path, 'w') as args_file:
         for key, value in vars(args).items():
-            if key == 'num_tiles' and isinstance(value, list):  # Special case for 'num_tiles' argument.
+            if key == 'parameters' and isinstance(value, list):  # Special case for 'parameters' argument.
                 for plist in value:
                     args_file.write('--{}\n{}\n'.format(key, '\n'.join(str(i) for i in plist)))
             elif isinstance(value, list):
-                value = '\n'.join(str(i) for i in value)
+                value = ' '.join(str(i) for i in value)
                 args_file.write('--{}\n{}\n'.format(key, value))
             else:
                 args_file.write('--{}\n{}\n'.format(key, value))
