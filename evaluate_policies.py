@@ -29,22 +29,21 @@ def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, rend
     return g_t
 
 
-def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
-    if np.count_nonzero(performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num]) != 0:
-        return
+def evaluate_policies(policies_memmap, performance_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
+
+    if evaluation_run_num == 0:
+        performance_memmap[config_num]['parameters'] = policies_memmap[config_num]['parameters']
 
     # Load the policy to evaluate:
-    configuration = policies_memmap[ace_run_num, config_num]
-    num_features = configuration['parameters']['num_features']
-    policy = configuration['policies'][policy_num]
-    weights = policy['weights'][:, :num_features]  # trim potential padding.
-    actor = BinaryACE(weights.shape[0], weights.shape[1])
+    configuration = policies_memmap[config_num]['parameters']
+    weights = policies_memmap[config_num]['policies'][ace_run_num, policy_num]['weights']
+    actor = BinaryACE(weights.shape[0], weights.shape[1], 0.)
     actor.theta = weights
 
     # Handle situations where the learning process diverged:
     if np.any(np.isnan(weights)):
         # If the weights overflowed, assign NaN as return:
-        performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = np.nan
+        performance_memmap[config_num]['results'][ace_run_num, policy_num, evaluation_run_num] = np.nan
     else:
         # Set up the environment:
         import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
@@ -58,13 +57,13 @@ def evaluate_policies(performance_memmap, policies_memmap, evaluation_run_num, a
             raise NotImplementedError
 
         # Configure the tile coder:
-        num_tiles = configuration['num_tiles']
+        num_tiles_per_dim = configuration['num_tiles_per_dim']
         num_tilings = configuration['num_tilings']
         bias_unit = configuration['bias_unit']
-        tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles, num_tilings, bias_unit)
+        tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, num_tiles_per_dim, num_tilings, bias_unit)
 
         # Write the total rewards received to file:
-        performance_memmap[evaluation_run_num, ace_run_num, config_num, policy_num] = evaluate_policy(actor, tc, env, rng)
+        performance_memmap[config_num]['results'][ace_run_num, policy_num, evaluation_run_num] = evaluate_policy(actor, tc, env, rng)
 
 
 if __name__ == '__main__':
@@ -76,12 +75,11 @@ if __name__ == '__main__':
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per run')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
-    parser.add_argument('--backend', type=str, choices=['loky', 'threading'], default='loky', help='The backend to use (\'loky\' for processes or \'threading\' for threads; always use \'loky\' because Python threading is terrible).')
     parser.add_argument('--objective', type=str, choices=['excursions', 'alternative_life', 'episodic'], default='episodic', help='Determines the state distribution the starting state is sampled from (excursions: behaviour policy, alternative life: target policy, episodic: environment start state.)')
-    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to evaluate the learned policies on.')
+    parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
     args = parser.parse_args()
 
-    # Generate the random seed for each run without replacement to prevent the birthday problem:
+    # Generate the random seed for each run without replacement to prevent the birthday paradox:
     random.seed(args.random_seed)
     random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
 
@@ -91,20 +89,23 @@ if __name__ == '__main__':
 
     # Load the learned policies to evaluate:
     policies_memmap = np.lib.format.open_memmap(str(experiment_path / 'policies.npy'), mode='r')
-    num_ace_runs, num_configurations, num_policies = policies_memmap['policies'].shape
+    num_configurations, num_ace_runs, num_policies = policies_memmap['policies'].shape
+
+    parameters_dtype = policies_memmap['parameters'].dtype
+    performance_dtype = np.dtype([
+        ('parameters', parameters_dtype),
+        ('results', float, (num_ace_runs, num_policies, args.num_evaluation_runs))
+    ])
 
     # Create the memmapped array of results to be populated in parallel:
     performance_memmap_path = str(experiment_path / '{}_performance.npy'.format(args.objective))
-    if os.path.isfile(performance_memmap_path):
-        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
-    else:
-        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(args.num_evaluation_runs, num_ace_runs, num_configurations, num_policies), dtype=float, mode='w+')
+    performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(num_configurations,), dtype=performance_dtype, mode='w+')
 
     # Evaluate the learned policies in parallel:
     with tqdm_joblib(tqdm(total=args.num_evaluation_runs * num_ace_runs * num_configurations * num_policies)) as progress_bar:
-        Parallel(n_jobs=args.num_cpus, verbose=0, backend=args.backend)(
+        Parallel(n_jobs=args.num_cpus, verbose=0)(
             delayed(evaluate_policies)(
-                performance_memmap, policies_memmap,
+                policies_memmap, performance_memmap,
                 evaluation_run_num, ace_run_num, config_num, policy_num, random_seed
             )
             for evaluation_run_num, random_seed in enumerate(random_seeds)
