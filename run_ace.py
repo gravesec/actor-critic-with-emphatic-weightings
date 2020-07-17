@@ -1,43 +1,70 @@
 import os
 import gym
 import gym_puddle
+import random
 import argparse
-import itertools
 import numpy as np
 from src import utils
 from tqdm import tqdm
 from pathlib import Path
-from src.utils import tqdm_joblib
 from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
 
 
-def run_ace(experience_memmap, policies_memmap, run_num, config_num, parameters):
-    # Check if this run and configuration has already been done:
+def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
+    env = gym.make('MountainCar-v0').unwrapped if env is None else env
+    g_t = 0.
+    indices_t = tc.encode(env.reset())
+    for t in range(num_timesteps):
+        a_t = rng.choice(env.action_space.n, p=actor.pi(indices_t))
+        s_tp1, r_tp1, terminal, _ = env.step(a_t)
+        indices_t = tc.encode(s_tp1)
+        g_t += r_tp1
+        if terminal:
+            break
+        if render:
+            env.render()
+    return g_t
+
+
+def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
+    alpha_a, alpha_w, alpha_v, lambda_c, eta = parameters
+
+    # If this run and configuration has already been done (i.e., previous run timed out), exit early:
     if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
         return
 
-    alpha_a, alpha_w, alpha_v, lambda_c, eta = parameters
-
+    # If this is the first run with a set of parameters, save the parameters:
     if run_num == 0:
         policies_memmap[config_num]['parameters'] = (args.gamma, alpha_a, alpha_w, alpha_v, lambda_c, eta, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
+        performance_memmap[config_num]['parameters'] = (args.gamma, alpha_a, alpha_w, alpha_v, lambda_c, eta, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
+
+    # Create the environment to evaluate the learned policy in:
+    import gym_puddle
+    env = gym.make(args.environment).unwrapped
+    env.seed(random_seed)
+    rng = env.np_random
 
     actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
     critic = BinaryTDC(tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
-    transitions = experience_memmap[run_num]
+
     policies = np.zeros(num_policies, dtype=policy_dtype)
+    performance = np.zeros((num_policies, args.num_evaluation_runs), dtype=float)
+
+    transitions = experience_memmap[run_num]
     gamma_t = 0.
     f_t = 0.
     rho_tm1 = 1.
     indices_t = tc.encode(transitions[0][0])
     for t, transition in enumerate(transitions):
-        # Save the learned policy if it's a checkpoint timestep:
+        # Save and evaluate the learned policy if it's a checkpoint timestep:
         if t % args.checkpoint_interval == 0:
             policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
+            performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
 
         # Unpack the stored transition.
         s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
@@ -59,19 +86,28 @@ def run_ace(experience_memmap, policies_memmap, run_num, config_num, parameters)
         gamma_t = gamma_tp1
         indices_t = indices_tp1
         rho_tm1 = rho_t
-    # Save the policy after the final timestep:
+    # Save and evaluate the policy after the final timestep:
     policies[-1] = (t+1, np.copy(actor.theta))
+    performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
 
-    # Save the learned policies to the memmap:
+    # Save the learned policies and their performance to the memmap:
     policies_memmap[config_num]['policies'][run_num] = policies
+    performance_memmap[config_num]['results'][run_num] = performance
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
-    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
+
+    # Policy evaluation parameters:
+    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--num_evaluation_runs', type=int, default=5, help='The number of times to evaluate each policy')
+    parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
+    parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
+
+    # Experiment parameters:
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
@@ -82,6 +118,10 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
     args = parser.parse_args()
 
+    # Generate the random seed for each run without replacement to prevent the birthday paradox:
+    random.seed(args.random_seed)
+    random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
+
     # Save the command line arguments in a format interpretable by argparse:
     experiment_path = Path(args.experiment_name)
     utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
@@ -91,15 +131,10 @@ if __name__ == '__main__':
     num_runs, num_timesteps = experience_memmap.shape
 
     # Create the tile coder to be used for all parameter settings:
-    env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
-    tc = TileCoder(np.array([env.observation_space.low, env.observation_space.high]).T, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
+    dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
+    tc = TileCoder(np.array([dummy_env.observation_space.low, dummy_env.observation_space.high]).T, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
 
     # Create the memmapped array of learned policies that will be populated in parallel:
-    num_policies = num_timesteps // args.checkpoint_interval + 1
-    policy_dtype = np.dtype([
-            ('timesteps', int),
-            ('weights', float, (env.action_space.n, tc.total_num_tiles))
-    ])
     parameters_dtype = np.dtype([
         ('alpha_a', float),
         ('alpha_w', float),
@@ -111,6 +146,11 @@ if __name__ == '__main__':
         ('num_tilings', int),
         ('bias_unit', bool)
     ])
+    policy_dtype = np.dtype([
+            ('timesteps', int),
+            ('weights', float, (dummy_env.action_space.n, tc.total_num_tiles))
+    ])
+    num_policies = num_timesteps // args.checkpoint_interval + 1
     configuration_dtype = np.dtype([
         ('parameters', parameters_dtype),
         ('policies', policy_dtype, (num_runs, num_policies))
@@ -121,10 +161,21 @@ if __name__ == '__main__':
     else:
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, shape=(len(args.parameters),), dtype=configuration_dtype, mode='w+')
 
+    # Create the memmapped array of performance results for the learned policies:
+    performance_dtype = np.dtype([
+        ('parameters', parameters_dtype),
+        ('results', float, (num_runs, num_policies, args.num_evaluation_runs))
+    ])
+    performance_memmap_path = str(experiment_path / 'performance.npy')
+    if os.path.isfile(performance_memmap_path):
+        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
+    else:
+        performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
+
     # Run ACE for each configuration in parallel:
-    with tqdm_joblib(tqdm(total=num_runs * len(args.parameters))) as progress_bar:
+    with utils.tqdm_joblib(tqdm(total=num_runs * len(args.parameters))) as progress_bar:
         Parallel(n_jobs=args.num_cpus, verbose=0)(
-            delayed(run_ace)(experience_memmap, policies_memmap, run_num, config_num, parameters)
+            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed)
             for config_num, parameters in enumerate(args.parameters)
-            for run_num in range(num_runs)
+            for run_num, random_seed in enumerate(random_seeds)
         )
