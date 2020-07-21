@@ -11,22 +11,7 @@ from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
 from src.function_approximation.tile_coder import TileCoder
-
-
-def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
-    env = gym.make('MountainCar-v0').unwrapped if env is None else env
-    g_t = 0.
-    indices_t = tc.encode(env.reset())
-    for t in range(num_timesteps):
-        a_t = rng.choice(env.action_space.n, p=actor.pi(indices_t))
-        s_tp1, r_tp1, terminal, _ = env.step(a_t)
-        indices_t = tc.encode(s_tp1)
-        g_t += r_tp1
-        if terminal:
-            break
-        if render:
-            env.render()
-    return g_t
+from evaluate_policies import evaluate_policy
 
 
 def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
@@ -55,50 +40,58 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     policies = np.zeros(num_policies, dtype=policy_dtype)
     performance = np.zeros((num_policies, args.num_evaluation_runs), dtype=float)
 
-    transitions = experience_memmap[run_num]
-    gamma_t = 0.
-    f_t = 0.
-    rho_tm1 = 1.
-    indices_t = tc.encode(transitions[0][0])
-    for t, transition in enumerate(transitions):
-        # Save and evaluate the learned policy if it's a checkpoint timestep:
-        if t % args.checkpoint_interval == 0:
-            policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
-            performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+    np.seterr(divide='raise', over='raise', invalid='raise')
+    try:
+        transitions = experience_memmap[run_num]
+        gamma_t = 0.
+        f_t = 0.
+        rho_tm1 = 1.
+        indices_t = tc.encode(transitions[0][0])
+        for t, transition in enumerate(transitions):
+            # Save and evaluate the learned policy if it's a checkpoint timestep:
+            if t % args.checkpoint_interval == 0:
+                policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
+                performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
 
-        # Unpack the stored transition.
-        s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
-        gamma_tp1 = args.gamma if not terminal else 0  # Transition-dependent discounting.
-        indices_tp1 = tc.encode(s_tp1)
-        i_t = i(s_t, gamma_t)
-        # Compute importance sampling ratio for the policy:
-        pi_t = actor.pi(indices_t)
-        mu_t = mu(s_t)
-        rho_t = pi_t[a_t] / mu_t[a_t]
-        # Update the critic:
-        delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
-        critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
-        # Update the actor:
-        f_t = rho_tm1 * gamma_t * f_t + i_t
-        m_t = (1 - eta) * i_t + eta * f_t
-        actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
+            # Unpack the stored transition.
+            s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
+            gamma_tp1 = args.gamma if not terminal else 0  # Transition-dependent discounting.
+            indices_tp1 = tc.encode(s_tp1)
+            i_t = i(s_t, gamma_t)
+            # Compute importance sampling ratio for the policy:
+            pi_t = actor.pi(indices_t)
+            mu_t = mu(s_t)
+            rho_t = pi_t[a_t] / mu_t[a_t]
+            # Update the critic:
+            delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
+            critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+            # Update the actor:
+            f_t = rho_tm1 * gamma_t * f_t + i_t
+            m_t = (1 - eta) * i_t + eta * f_t
+            actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
 
-        gamma_t = gamma_tp1
-        indices_t = indices_tp1
-        rho_tm1 = rho_t
-    # Save and evaluate the policy after the final timestep:
-    policies[-1] = (t+1, np.copy(actor.theta))
-    performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+            gamma_t = gamma_tp1
+            indices_t = indices_tp1
+            rho_tm1 = rho_t
+        # Save and evaluate the policy after the final timestep:
+        policies[-1] = (t+1, np.copy(actor.theta))
+        performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
 
-    # Save the learned policies and their performance to the memmap:
-    policies_memmap[config_num]['policies'][run_num] = policies
-    performance_memmap[config_num]['results'][run_num] = performance
+        # Save the learned policies and their performance to the memmap:
+        policies_memmap[config_num]['policies'][run_num] = policies
+        performance_memmap[config_num]['results'][run_num] = performance
+    except FloatingPointError:
+        # Save something to indicate the weights overflowed and exit early:
+        policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
+        performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.Nan)
+        return
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--experiment_name', type=str, default='experiment', help='The directory to read/write experiment files to/from')
+    parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
+    parser.add_argument('--experience_file', type=str, default='experiment/experience.npy', help='The file to read experience from')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
 
     # Policy evaluation parameters:
@@ -123,11 +116,11 @@ if __name__ == '__main__':
     random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
 
     # Save the command line arguments in a format interpretable by argparse:
-    experiment_path = Path(args.experiment_name)
-    utils.save_args_to_file(args, experiment_path / Path(parser.prog).with_suffix('.args'))
+    output_dir = Path(args.output_dir)
+    utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
 
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
-    experience_memmap = np.lib.format.open_memmap(str(experiment_path / 'experience.npy'), mode='r')
+    experience_memmap = np.lib.format.open_memmap(args.experience_file, mode='r')
     num_runs, num_timesteps = experience_memmap.shape
 
     # Create the tile coder to be used for all parameter settings:
@@ -155,7 +148,7 @@ if __name__ == '__main__':
         ('parameters', parameters_dtype),
         ('policies', policy_dtype, (num_runs, num_policies))
     ])
-    policies_memmap_path = str(experiment_path / 'policies.npy')
+    policies_memmap_path = str(output_dir / 'policies.npy')
     if os.path.isfile(policies_memmap_path):
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, mode='r+')
     else:
@@ -166,7 +159,7 @@ if __name__ == '__main__':
         ('parameters', parameters_dtype),
         ('results', float, (num_runs, num_policies, args.num_evaluation_runs))
     ])
-    performance_memmap_path = str(experiment_path / 'performance.npy')
+    performance_memmap_path = str(output_dir / 'performance.npy')
     if os.path.isfile(performance_memmap_path):
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
     else:
