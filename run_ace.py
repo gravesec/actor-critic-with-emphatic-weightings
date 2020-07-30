@@ -50,8 +50,8 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
-                policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
                 performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+                policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
             # Unpack the stored transition.
             s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
@@ -78,12 +78,12 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
 
         # Save the learned policies and their performance to the memmap:
-        policies_memmap[config_num]['policies'][run_num] = policies
         performance_memmap[config_num]['results'][run_num] = performance
-    except FloatingPointError:
-        # Save something to indicate the weights overflowed and exit early:
-        policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
+        policies_memmap[config_num]['policies'][run_num] = policies
+    except (FloatingPointError, ValueError) as e:
+        # Save NaN to indicate the weights overflowed and exit early:
         performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
+        policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
         return
 
 
