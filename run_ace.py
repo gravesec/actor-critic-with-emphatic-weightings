@@ -83,7 +83,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     except FloatingPointError:
         # Save something to indicate the weights overflowed and exit early:
         policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
-        performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.Nan)
+        performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
         return
 
 
