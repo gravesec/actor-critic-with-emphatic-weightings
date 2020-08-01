@@ -23,8 +23,8 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
     # If this is the first run with a set of parameters, save the parameters:
     if run_num == 0:
-        policies_memmap[config_num]['parameters'] = (args.gamma, alpha_a, alpha_w, alpha_v, lambda_c, eta, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
-        performance_memmap[config_num]['parameters'] = (args.gamma, alpha_a, alpha_w, alpha_v, lambda_c, eta, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
+        policies_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
+        performance_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
 
     # Create the environment to evaluate the learned policy in:
     import gym_puddle
