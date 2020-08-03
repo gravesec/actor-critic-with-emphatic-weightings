@@ -20,9 +20,21 @@ class TileCoder:
 
     def encode(self, obs):
         # Compute the coordinates in each tiling of the tile containing the observation:
-        tiling_coords = ((np.asarray(obs) - self.space[:, 0] + self.tiling_offsets) // self.tile_size).astype(int)
+        # Allow obs to be an array-like with shape (d,) or (n, d)
+        # Note that np.asarray(obs)[..., None, :] has shape of either (1, d) or (n, 1, d),
+        # and so does tiling_coords
+        tiling_coords = ((np.asarray(obs)[..., None, :] - self.space[:, 0] + self.tiling_offsets) // self.tile_size).astype(int)
         # Convert the N-dimensional tiling coordinates to a 1-dimensional index in the tiling:
+        # self.coords_to_indices has shape (d,), so tiling_indices has shape(n, k) or (k,)
         tiling_indices = np.dot(tiling_coords, self.coords_to_indices)
         # Convert the tiling indices to indices in the feature vector:
+        # self.tilings_to_features has shape (k,)
         feature_indices = self.tilings_to_features + tiling_indices
-        return np.append(feature_indices, self.total_num_tiles - 1) if self.bias_unit else feature_indices
+        if self.bias_unit:
+            if feature_indices.ndim == 2:
+                feature_indices = np.hstack([
+                    feature_indices, 
+                    (self.total_num_tiles - 1) * np.ones((len(feature_indices), 1), dtype=int)])
+            else:
+                feature_indices = np.append(feature_indices, self.total_num_tiles - 1)
+        return feature_indices
