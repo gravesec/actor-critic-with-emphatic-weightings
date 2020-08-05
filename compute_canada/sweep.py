@@ -25,9 +25,9 @@ if __name__ == '__main__':
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
     parser.add_argument('--gamma', '--discount_rate', type=float, default=.99, help='Discount rate.')
-    parser.add_argument('--alpha_a', type=float, nargs='+', default=[1/2**i for i in range(11)], help='Step sizes for the actor.')
-    parser.add_argument('--alpha_w', type=float, nargs='+', default=[1/2**i for i in range(11)], help='Step sizes for the critic.')
-    parser.add_argument('--alpha_v', type=float, nargs='+', default=[1/2**i for i in range(11)], help='Step sizes for the critic\'s auxiliary weights.')
+    parser.add_argument('--alpha_a', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the actor.')
+    parser.add_argument('--alpha_w', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the critic.')
+    parser.add_argument('--alpha_v', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the critic\'s auxiliary weights.')
     parser.add_argument('--lambda_c', type=float, nargs='+', default=[(1 - 1/2**i) for i in range(6)], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', type=float, nargs='+', default=[1.], help='OffPAC/ACE tradeoff parameter.')
     parser.add_argument('--num_tiles_per_dim', type=int, nargs='+', default=[5, 5], help='The number of tiles per dimension to use in the tile coder.')
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
 
     # Script parameters:
-    parser.add_argument('--seconds_per_combination', type=int, default=30, help='Predicted time in seconds a single parameter combination will take to run once. To estimate this, run the experiment script with 1 CPU and a reduced number of combinations and time it.')
+    parser.add_argument('--seconds_per_combination', type=int, default=80, help='Predicted time in seconds a single parameter combination will take to run once. To estimate this, run the experiment script with 1 CPU and a reduced number of combinations and time it.')
     parser.add_argument('--num_hours', type=int, default=1, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
     parser.add_argument('--email', type=str, default='graves@ualberta.ca', help='Email address to report updates to.')
     parser.add_argument('--account', type=str, default='def-sutton', help='Allocation string to use in slurm.')

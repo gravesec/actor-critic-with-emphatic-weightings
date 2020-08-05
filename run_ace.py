@@ -95,9 +95,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
 
     # Policy evaluation parameters:
-    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_evaluation_runs', type=int, default=5, help='The number of times to evaluate each policy')
-    parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
+    parser.add_argument('--max_timesteps', type=int, default=5000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
 
     # Experiment parameters:
