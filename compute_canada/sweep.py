@@ -89,7 +89,7 @@ python ../../{args.script_name} \\
 --num_tiles_per_dim {' '.join(str(i) for i in args.num_tiles_per_dim)} \\
 --num_tilings {args.num_tilings} \\
 --bias_unit {args.bias_unit} \\
--p {parameters_string}
+--p {parameters_string}
 '''
         # Write the script to file:
         file_name = output_dir / script_name
