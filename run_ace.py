@@ -10,6 +10,7 @@ from pathlib import Path
 from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
 from src.algorithms.tdc import BinaryTDC
+from src.algorithms.tdc import BinaryGQ
 from src.function_approximation.tile_coder import TileCoder
 from evaluate_policies import evaluate_policy
 
@@ -33,9 +34,13 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     rng = env.np_random
 
     actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
-    critic = BinaryTDC(tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
+    if args.all_actions:
+        critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
+    else:
+        critic = BinaryTDC(tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
+
     i = eval(args.interest_function)  # Create the interest function to use.
-    mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy.
+    mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
 
     policies = np.zeros(num_policies, dtype=policy_dtype)
     performance = np.zeros((num_policies, args.num_evaluation_runs), dtype=float)
@@ -62,13 +67,17 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             pi_t = actor.pi(indices_t)
             mu_t = mu(s_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
-            # Update the critic:
-            delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
-            critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
-            # Update the actor:
+
             f_t = rho_tm1 * gamma_t * f_t + i_t
             m_t = (1 - eta) * i_t + eta * f_t
-            actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
+            if args.all_actions:
+                critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
+                q_t = critic.estimate(indices_t)
+                actor.all_actions_learn(indices_t, q_t, m_t)
+            else:
+                delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
+                critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
+                actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
 
             gamma_t = gamma_tp1
             indices_t = indices_tp1
@@ -101,6 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
 
     # Experiment parameters:
+    parser.add_argument('--all_actions', default=False, action='store_true', help='Use all-actions updates instead of TD error-based updates.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
