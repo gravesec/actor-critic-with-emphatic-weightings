@@ -60,7 +60,7 @@ if __name__ == '__main__':
     node_configs = np.array_split(combinations, num_nodes)  # Split the combinations evenly-ish across nodes.
     script_names = []
     for script_num, node_config in enumerate(node_configs):
-        parameters_string = ' \\\n-p '.join([' '.join([str(p) for p in config]) for config in node_config])
+        parameters_string = ' \\\n--p '.join([' '.join([str(p) for p in config]) for config in node_config])
         script_name = f'sweep{script_num}.sh'
         script_names.append(script_name)
         script = f'''#!/bin/bash
