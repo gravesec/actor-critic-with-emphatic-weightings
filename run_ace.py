@@ -97,7 +97,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
     parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experiment/experience.npy', help='The file to read experience from')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_tiles_per_dim', type=int, nargs='+', default=[5, 5], help='The number of tiles per dimension to use in the tile coder.')
     parser.add_argument('--num_tilings', type=int, default=8, help='The number of tilings to use in the tile coder.')
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
-    args = parser.parse_args()
+    args, unknown_args = parser.parse_known_args()
 
     # Generate the random seed for each run without replacement to prevent the birthday paradox:
     random.seed(args.random_seed)
