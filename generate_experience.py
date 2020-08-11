@@ -5,6 +5,7 @@ import random
 import argparse
 import numpy as np
 from src import utils
+from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
 
@@ -55,9 +56,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=2937573853, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 means all)')
-    parser.add_argument('--verbosity', type=int, default=51, help='Controls how verbose the joblib progress reporting is. 0 for none, 51 for all iterations to stdout.')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
-    parser.add_argument('--environment', type=str, choices=['MountainCar-v0', 'Acrobot-v1', 'PuddleWorld-v0'], default='MountainCar-v0', help='The environment to generate experience from.')
+    parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
     args = parser.parse_args()
 
     # Generate the random seed for each run without replacement to prevent the birthday problem:
@@ -85,7 +85,8 @@ if __name__ == '__main__':
         experience_memmap = np.lib.format.open_memmap(experience_memmap_path, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
 
     # Generate the experience in parallel:
-    Parallel(n_jobs=args.num_cpus, verbose=args.verbosity)(
-        delayed(generate_experience)(experience_memmap, run_num, random_seed)
-        for run_num, random_seed in enumerate(random_seeds)
-    )
+    with utils.tqdm_joblib(tqdm(total=args.num_runs)) as progress_bar:
+        Parallel(n_jobs=args.num_cpus, verbose=0)(
+            delayed(generate_experience)(experience_memmap, run_num, random_seed)
+            for run_num, random_seed in enumerate(random_seeds)
+        )
