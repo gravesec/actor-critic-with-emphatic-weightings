@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha_v', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the critic\'s auxiliary weights.')
     parser.add_argument('--lambda_c', type=float, nargs='+', default=[(1 - 1/2**i) for i in range(6)], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', type=float, nargs='+', default=[1.], help='OffPAC/ACE tradeoff parameter.')
-    parser.add_argument('--num_tiles_per_dim', type=int, nargs='+', default=[5, 5], help='The number of tiles per dimension to use in the tile coder.')
+    parser.add_argument('--num_tiles_per_dim', type=int, nargs=2, default=[5, 5], help='The number of tiles per dimension to use in the tile coder.')
     parser.add_argument('--num_tilings', type=int, default=8, help='The number of tilings to use in the tile coder.')
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
 
