@@ -81,7 +81,7 @@ def run_low_var_ace(experience_memmap, policies_memmap, performance_memmap, run_
 
         # Save the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
-        performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+        performance[-1] = [evaluate_policy(actor, tc_a, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
 
         # Save the learned policies and their performance to the memmap:
         performance_memmap[config_num]['results'][run_num] = performance
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
     parser.add_argument('--gamma', '--discount_rate', type=float, default=.99, help='Discount rate.')
-    parser.add_argument('--parameters', type=float, nargs=5, action='append', metavar=('alpha_a', 'alpha_w', 'alpha_v', 'lambda', 'eta'), help='Parameters to use. Can be specified multiple times to run multiple configurations in parallel.')
+    parser.add_argument('-p', '--parameters', type=float, nargs=5, action='append', metavar=('alpha_a', 'alpha_w', 'alpha_v', 'lambda', 'eta'), help='Parameters to use. Can be specified multiple times to run multiple configurations in parallel.')
     parser.add_argument('--num_tiles_per_dim_a', type=int, nargs=2, default=[5, 5], help='The number of tiles per dimension to use in the actor\'s tile coder.')
     parser.add_argument('--num_tilings_a', type=int, default=8, help='The number of tilings to use in the actor\'s tile coder.')
     parser.add_argument('--num_tiles_per_dim_c', type=int, nargs=2, default=[5, 5], help='The number of tiles per dimension to use in the critic\'s tile coder.')
@@ -131,8 +131,8 @@ if __name__ == '__main__':
 
     # Create the tile coders to be used for all parameter settings:
     dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
-    tc_a = TileCoder(np.array([dummy_env.observation_space.low, dummy_env.observation_space.high]).T, args.num_tiles_a, args.num_tilings_a, args.bias_unit)
-    tc_c = TileCoder(np.array([dummy_env.observation_space.low, dummy_env.observation_space.high]).T, args.num_tiles_c, args.num_tilings_c, args.bias_unit)
+    tc_a = TileCoder(np.array([dummy_env.observation_space.low, dummy_env.observation_space.high]).T, args.num_tiles_per_dim_a, args.num_tilings_a, args.bias_unit)
+    tc_c = TileCoder(np.array([dummy_env.observation_space.low, dummy_env.observation_space.high]).T, args.num_tiles_per_dim_c, args.num_tilings_c, args.bias_unit)
 
     # Create the memmapped array of learned policies that will be populated in parallel:
     parameters_dtype = np.dtype([

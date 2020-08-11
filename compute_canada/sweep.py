@@ -60,7 +60,7 @@ if __name__ == '__main__':
     node_configs = np.array_split(combinations, num_nodes)  # Split the combinations evenly-ish across nodes.
     script_names = []
     for script_num, node_config in enumerate(node_configs):
-        parameters_string = ' \\\n--p '.join([' '.join([str(p) for p in config]) for config in node_config])
+        parameters_string = ' \\\n-p '.join([' '.join([str(p) for p in config]) for config in node_config])
         script_name = f'sweep{script_num}.sh'
         script_names.append(script_name)
         script = f'''#!/bin/bash
@@ -89,7 +89,7 @@ python ../../{args.script_name} \\
 --num_tiles_per_dim {' '.join(str(i) for i in args.num_tiles_per_dim)} \\
 --num_tilings {args.num_tilings} \\
 --bias_unit {args.bias_unit} \\
---p {parameters_string}
+-p {parameters_string}
 '''
         # Write the script to file:
         file_name = output_dir / script_name
