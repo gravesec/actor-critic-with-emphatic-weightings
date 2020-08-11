@@ -9,18 +9,17 @@ from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
-from src.algorithms.tdc import BinaryTDC
-from src.algorithms.tdc import BinaryGQ
+from src.algorithms.tdc import BinaryTDC, BinaryGQ
 from src.function_approximation.tile_coder import TileCoder
 from evaluate_policies import evaluate_policy
 
 
 def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
-    alpha_a, alpha_w, alpha_v, lambda_c, eta = parameters
-
     # If this run and configuration has already been done (i.e., previous run timed out), exit early:
     if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
         return
+
+    alpha_a, alpha_w, alpha_v, lambda_c, eta = parameters
 
     # If this is the first run with a set of parameters, save the parameters:
     if run_num == 0:
@@ -98,7 +97,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experiment/experience.npy', help='The file to read experience from')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
@@ -150,8 +149,8 @@ if __name__ == '__main__':
         ('bias_unit', bool)
     ])
     policy_dtype = np.dtype([
-            ('timesteps', int),
-            ('weights', float, (dummy_env.action_space.n, tc.total_num_tiles))
+        ('timesteps', int),
+        ('weights', float, (dummy_env.action_space.n, tc.total_num_tiles))
     ])
     num_policies = num_timesteps // args.checkpoint_interval + 1
     configuration_dtype = np.dtype([
