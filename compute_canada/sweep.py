@@ -71,7 +71,7 @@ if __name__ == '__main__':
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={args.cores_per_node}
 #SBATCH --time=00-{args.num_hours}:00:00  # DD-HH:MM:SS
-module load python/3.6.5
+module load python/3.6.8
 source ../../ve/bin/activate
 python ../../{args.script_name} \\
 --output_dir \'sweep{script_num}\' \\
