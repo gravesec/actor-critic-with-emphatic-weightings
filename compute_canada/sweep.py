@@ -1,6 +1,7 @@
 import os
 import stat
 import time
+import random
 import argparse
 import itertools
 import numpy as np
@@ -57,6 +58,7 @@ if __name__ == '__main__':
     # Generate the scripts:
     output_dir = Path(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
+    random.shuffle(combinations)  # Shuffle parameter combinations to make sure each node finishes in roughly the same amount of time.
     node_configs = np.array_split(combinations, num_nodes)  # Split the combinations evenly-ish across nodes.
     script_names = []
     for script_num, node_config in enumerate(node_configs):
