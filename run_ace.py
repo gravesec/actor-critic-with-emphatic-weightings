@@ -67,7 +67,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             mu_t = mu(s_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
 
-            f_t = rho_tm1 * gamma_t * f_t + i_t
+            f_t = rho_tm1 * gamma_t * f_t + (1 - gamma_t) * i_t
             m_t = (1 - eta) * i_t + eta * f_t
             if args.all_actions:
                 critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
