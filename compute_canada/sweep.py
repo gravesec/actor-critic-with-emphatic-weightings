@@ -23,6 +23,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--script_name', type=str, default='run_ace.py', help='The script to run on each node.')
     parser.add_argument('--all_actions', type=int, choices=[0, 1], default=0, help='Use all-actions updates instead of TD error-based updates.')
+    parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
@@ -85,6 +86,7 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --max_timesteps {args.max_timesteps} \\
 --random_seed {args.random_seed} \\
 --all_actions {args.all_actions} \\
+--normalize {args.normalize} \\
 --interest_function \'{args.interest_function}\' \\
 --behaviour_policy \'{args.behaviour_policy}\' \\
 --environment \'{args.environment}\' \\
