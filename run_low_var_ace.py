@@ -35,7 +35,7 @@ def run_low_var_ace(experience_memmap, policies_memmap, performance_memmap, run_
 
     actor = BinaryACE(env.action_space.n, tc_a.total_num_tiles, alpha_a / tc_a.num_active_features)
     critic = BinaryLowVarETD(tc_c.total_num_tiles, alpha_w / tc_c.num_active_features, lambda_c)
-    fhat = BinaryFHat(tc_c.total_num_tiles, alpha_v / tc_c.num_active_features)
+    fhat = BinaryFHat(tc_c.total_num_tiles, alpha_v / tc_c.num_active_features, args.normalize)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
@@ -105,6 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_timesteps', type=int, default=5000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
 
+    parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
     parser.add_argument('--environment', type=str, default='MountainCar-v0', help='An OpenAI Gym environment string.')
