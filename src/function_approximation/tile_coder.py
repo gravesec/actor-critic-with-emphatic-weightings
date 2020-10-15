@@ -4,7 +4,7 @@ import numpy as np
 class TileCoder:
     def __init__(self, space, num_tiles_per_dim, num_tilings, bias_unit=False):
         self.space = np.asarray(space)
-        self.num_tiles_per_dim = np.asarray(num_tiles_per_dim)
+        self.num_tiles_per_dim = np.asarray(num_tiles_per_dim) + 1
         self.num_tilings = int(num_tilings)
         self.bias_unit = bias_unit
         self.num_active_features = self.num_tilings + self.bias_unit
