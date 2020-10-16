@@ -2,7 +2,7 @@ import numpy as np
 
 
 # TODO: The linear one's probably based on an old implementation
-class LinearLowVarETD:
+class LinearETD:
 
     def __init__(self, num_features, alpha, lambda_c):
         self.num_features = num_features
@@ -22,7 +22,7 @@ class LinearLowVarETD:
         return self.v.dot(x)
 
 
-class BinaryLowVarETD:
+class BinaryETD:
 
     def __init__(self, num_features, alpha_c, lambda_c):
         self.alpha_c = alpha_c
@@ -30,7 +30,7 @@ class BinaryLowVarETD:
         self.e = np.zeros(num_features)
         self.v = np.zeros(num_features)
 
-    def learn(self, delta_t, indices_t, gamma_t, i_t, indices_tp1, gamma_tp1, rho_t, F_t, r_tp1=None, rho_tp1=None, a_t=None, a_tp1=None):
+    def learn(self, delta_t, indices_t, gamma_t, i_t, rho_t, F_t):
         M = self.lambda_c * i_t + (1. - self.lambda_c) * F_t
         self.e *= rho_t * gamma_t * self.lambda_c
         self.e[indices_t] += M * rho_t

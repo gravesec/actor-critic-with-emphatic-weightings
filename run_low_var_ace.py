@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
-from src.algorithms.low_var_etd import BinaryLowVarETD
+from src.algorithms.etd import BinaryETD
 from src.algorithms.fhat import BinaryFHat
 from src.function_approximation.tile_coder import TileCoder
 from evaluate_policies import evaluate_policy
@@ -34,7 +34,7 @@ def run_low_var_ace(experience_memmap, policies_memmap, performance_memmap, run_
     rng = env.np_random
 
     actor = BinaryACE(env.action_space.n, tc_a.total_num_tiles, alpha_a / tc_a.num_active_features)
-    critic = BinaryLowVarETD(tc_c.total_num_tiles, alpha_w / tc_c.num_active_features, lambda_c)
+    critic = BinaryETD(tc_c.total_num_tiles, alpha_w / tc_c.num_active_features, lambda_c)
     fhat = BinaryFHat(tc_c.total_num_tiles, alpha_v / tc_c.num_active_features, args.normalize)
 
     i = eval(args.interest_function)  # Create the interest function to use.
@@ -71,7 +71,7 @@ def run_low_var_ace(experience_memmap, policies_memmap, performance_memmap, run_
             m_t = (1 - eta) * i_t + eta * f_t
 
             delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1_c) - critic.estimate(indices_t_c)
-            critic.learn(delta_t, indices_t_c, gamma_t, i_t, indices_tp1_c, gamma_tp1, rho_t, f_t)
+            critic.learn(delta_t, indices_t_c, gamma_t, i_t, rho_t, f_t)
             actor.learn(indices_t_a, a_t, delta_t, m_t, rho_t)
             fhat.learn(indices_tp1_c, gamma_tp1, indices_t_c, rho_t, i_tp1)
 
