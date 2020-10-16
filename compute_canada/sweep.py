@@ -22,6 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=735026919, help='The master random seed to use')
 
     parser.add_argument('--script_name', type=str, default='run_ace.py', help='The script to run on each node.')
+    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD'], default='TDC', help='Which critic to use.')
     parser.add_argument('--all_actions', type=int, choices=[0, 1], default=0, help='Use all-actions updates instead of TD error-based updates.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
@@ -44,6 +45,10 @@ if __name__ == '__main__':
     parser.add_argument('--account', type=str, default='def-sutton', help='Allocation string to use in slurm.')
     parser.add_argument('--cores_per_node', type=int, default=80, help='Number of cores per node on the cluster. Niagara is 40.')
     args = parser.parse_args()
+
+    # If using ETD critic, alpha_v is ignored, so make sure we don't run extra parameter combinations:
+    if args.critic == 'ETD':
+        args.alpha_v = [0.]
 
     # Calculate how many nodes to use:
     parameters = [args.alpha_a, args.alpha_w, args.alpha_v, args.lambda_c, args.eta]
@@ -85,6 +90,7 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --num_evaluation_runs {args.num_evaluation_runs} \\
 --max_timesteps {args.max_timesteps} \\
 --random_seed {args.random_seed} \\
+--critic {args.critic} \\
 --all_actions {args.all_actions} \\
 --normalize {args.normalize} \\
 --interest_function \'{args.interest_function}\' \\
