@@ -113,7 +113,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--parameters', type=float, nargs=5, action='append', metavar=('alpha_a', 'alpha_w', 'alpha_v', 'lambda', 'eta'), help='Parameters to use. Can be specified multiple times to run multiple configurations in parallel.')
     parser.add_argument('--num_tiles_per_dim_a', type=int, nargs=2, default=[5, 5], help='The number of tiles per dimension to use in the actor\'s tile coder.')
     parser.add_argument('--num_tilings_a', type=int, default=8, help='The number of tilings to use in the actor\'s tile coder.')
-    parser.add_argument('--num_tiles_per_dim_c', type=int, nargs=2, default=[5, 5], help='The number of tiles per dimension to use in the critic\'s tile coder.')
+    parser.add_argument('--num_tiles_per_dim_c', type=int, nargs=2, default=[4, 4], help='The number of tiles per dimension to use in the critic\'s tile coder.')
     parser.add_argument('--num_tilings_c', type=int, default=8, help='The number of tilings to use in the critic\'s tile coder.')
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coders.')
     args, unknown_args = parser.parse_known_args()
