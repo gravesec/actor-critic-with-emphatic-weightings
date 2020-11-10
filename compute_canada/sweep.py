@@ -39,11 +39,11 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
 
     # Script parameters:
-    parser.add_argument('--seconds_per_combination', type=int, default=80, help='Predicted time in seconds a single parameter combination will take to run once. To estimate this, run the experiment script with 1 CPU and a reduced number of combinations and time it.')
+    parser.add_argument('--seconds_per_combination', type=float, default=80, help='Predicted time in seconds it takes for a single parameter combination to run once on a node. To estimate this, run an experiment script on one node for ~15 minutes and check the output; tqdm reports seconds per iteration.')
     parser.add_argument('--num_hours', type=int, default=1, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
     parser.add_argument('--email', type=str, default='graves@ualberta.ca', help='Email address to report updates to.')
     parser.add_argument('--account', type=str, default='def-sutton', help='Allocation string to use in slurm.')
-    parser.add_argument('--cores_per_node', type=int, default=80, help='Number of cores per node on the cluster. Niagara is 40.')
+    parser.add_argument('--cores_per_node', type=int, default=80, help='Number of cores per node on the cluster. Niagara is 40 or 80 with hyperthreading.')
     args = parser.parse_args()
 
     # If using ETD critic, alpha_v is ignored, so make sure we don't run extra parameter combinations:
@@ -53,12 +53,11 @@ if __name__ == '__main__':
     # Calculate how many nodes to use:
     parameters = [args.alpha_a, args.alpha_w, args.alpha_v, args.lambda_c, args.eta]
     combinations = list(itertools.product(*parameters))
-    core_hours = args.seconds_per_combination * len(combinations) * args.num_runs / 3600  # how long it would take 1 core to do the entire job.
-    node_hours = core_hours / args.cores_per_node  # how long it would take 1 node to do the entire job.
+    node_hours = args.seconds_per_combination * len(combinations) * args.num_runs / 3600  # how long it would take 1 core to do the entire job.
     num_nodes = int(np.ceil(node_hours / args.num_hours))  # how many nodes it would take to do the entire job in the given amount of time.
 
     # Confirm the number of nodes is ok:
-    if input(f'It would take 1 core approximately {core_hours} hours to do {args.num_runs} runs of {len(combinations)} combinations at {args.seconds_per_combination} seconds per combination.\nIt would take 1 node with {args.cores_per_node} cores approximately {node_hours} hours to do the entire job.\n{num_nodes} nodes would be required for the sweep to take {args.num_hours} hours.\nContinue generating scripts? y/[n]: ') != 'y':
+    if input(f'It would take 1 node approximately {node_hours} hours to do {args.num_runs} runs of {len(combinations)} combinations at {args.seconds_per_combination} seconds per combination.\n{num_nodes} nodes would be required for the sweep to take {args.num_hours} hours.\nContinue generating scripts? y/[n]: ') != 'y':
         exit(0)
 
     # Generate the scripts:
