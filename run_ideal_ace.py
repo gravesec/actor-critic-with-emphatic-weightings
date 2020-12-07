@@ -57,7 +57,9 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
         ideal_f_t_indices = indices_t.reshape((1,indices_t.shape[0]))
         ideal_f_t_mu = None
-        # ideal_f_t_gamma = None
+        ideal_f_t_gamma = np.array([gamma_t]).reshape((1,1))
+        ideal_f_t_i = None
+        ideal_f_t_a = None
 
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
@@ -76,25 +78,33 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             rho_t = pi_t[a_t] / mu_t[a_t]
 
             if terminal:
-                # ideal_f_t_gamma = None
+                ideal_f_t_gamma = None
                 ideal_f_t_mu = None
+                ideal_f_t_i = None
+                ideal_f_t_a = None
                 ideal_f_t_indices = None
             else:
                 if ideal_f_t_mu is None:
-                    ideal_f_t_mu = mu_t.reshape((1,1))
-                    # ideal_f_t_gamma = gamma_tp1.reshape((1,1))
+                    ideal_f_t_mu = np.array([mu_t[a_t]]).reshape((1,1))
+                    ideal_f_t_i = np.array([i_t]).reshape((1,1))
+                    ideal_f_t_a = np.array([a_t]).reshape((1,1))
                 else:
-                    ideal_f_t_mu = np.append(ideal_f_t_mu, mu_t.reshape((1,1)), axis=0)
-                    # ideal_f_t_gamma = np.append(ideal_f_t_gamma, gamma_tp1.reshape((1,1)), axis=0)
+                    ideal_f_t_mu = np.append(ideal_f_t_mu, np.array([mu_t[a_t]]).reshape((1,1)), axis=0)
+                    ideal_f_t_i = np.append(ideal_f_t_i, np.array([i_t]).reshape((1,1)), axis=0)
+                    ideal_f_t_a = np.append(ideal_f_t_a, np.array([a_t]).reshape((1,1)), axis=0)
 
             # f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
-            if gamma_t != 0:
-                ideal_f_t_rho = np.array([actor.pi(ideal_f_t_indices[state,:])/ideal_f_t_mu[state,1] for state in range(ideal_f_t_mu.shape[0]-1)])
-                f_t = (1 - gamma_t) * i_t + (gamma_t*np.sum(ideal_f_t_rho)) if args.normalize else i_t + (gamma_t*np.sum(ideal_f_t_rho))
+
+            f_t = 0.
+            if args.normalize:
+                for state in range(ideal_f_t_mu.shape[0]):
+                    f_t = (1 - ideal_f_t_gamma[state,0]) * ideal_f_t_i[state,0] +  (actor.pi(ideal_f_t_indices[state,:])[ideal_f_t_a[state,0]]/ideal_f_t_mu[state,0])*ideal_f_t_gamma[state,0]*f_t
             else:
-                f_t = i_t
+                for state in range(ideal_f_t_mu.shape[0]):
+                    f_t = ideal_f_t_i[state,0] + (actor.pi(ideal_f_t_indices[state,:])[ideal_f_t_a[state,0]]/ideal_f_t_mu[state,0])*ideal_f_t_gamma[state,0]*f_t
 
             m_t = (1 - eta) * i_t + eta * f_t
+
             if args.all_actions:
                 critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
                 q_t = critic.estimate(indices_t)
@@ -112,9 +122,12 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             indices_t = indices_tp1
             if ideal_f_t_indices is None:
                 ideal_f_t_indices = indices_t.reshape((1,indices_t.shape[0]))
+                ideal_f_t_gamma = np.array([gamma_t]).reshape((1,1))
             else:
                 ideal_f_t_indices = np.append(ideal_f_t_indices,indices_t.reshape((1,indices_t.shape[0])),axis=0)
-            rho_tm1 = rho_t
+                ideal_f_t_gamma = np.append(ideal_f_t_gamma, np.array([gamma_t]).reshape((1,1)), axis=0)
+
+            # rho_tm1 = rho_t
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
         performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
