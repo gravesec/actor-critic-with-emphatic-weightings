@@ -55,12 +55,12 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         rho_tm1 = 1.
         indices_t = tc.encode(transitions[0][0])
 
-        ideal_f_t_indices = indices_t.reshape((1,indices_t.shape[0]))
-        ideal_f_t_mu = None
-        # ideal_f_t_gamma = np.array([gamma_t]).reshape((1,1))
-        ideal_f_t_gamma = np.array([gamma_t])
-        ideal_f_t_i = None
-        ideal_f_t_a = None
+        ideal_indices = None
+        ideal_gamma = None
+        ideal_mu = None
+        ideal_i = None
+        ideal_a = None
+        interest_0 = i(transitions[0][0], gamma_t)
 
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
@@ -78,51 +78,18 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             mu_t = mu(s_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
 
-            if terminal:
-                ideal_f_t_gamma = None
-                ideal_f_t_mu = None
-                ideal_f_t_i = None
-                ideal_f_t_a = None
-                ideal_f_t_indices = None
-            else:
-                # if ideal_f_t_mu is None:
-                #     ideal_f_t_mu = np.array([mu_t[a_t]]).reshape((1,1))
-                #     ideal_f_t_i = np.array([i_t]).reshape((1,1))
-                #     ideal_f_t_a = np.array([a_t]).reshape((1,1))
-                # else:
-                #     ideal_f_t_mu = np.append(ideal_f_t_mu, np.array([mu_t[a_t]]).reshape((1,1)), axis=0)
-                #     ideal_f_t_i = np.append(ideal_f_t_i, np.array([i_t]).reshape((1,1)), axis=0)
-                #     ideal_f_t_a = np.append(ideal_f_t_a, np.array([a_t]).reshape((1,1)), axis=0)
-                if ideal_f_t_mu is None:
-                    ideal_f_t_mu = np.array([mu_t[a_t]])
-                    ideal_f_t_i = np.array([i_t])
-                    ideal_f_t_a = np.array([a_t])
-                else:
-                    ideal_f_t_mu = np.append(ideal_f_t_mu, mu_t[a_t])
-                    ideal_f_t_i = np.append(ideal_f_t_i, i_t)
-                    ideal_f_t_a = np.append(ideal_f_t_a, a_t)
-
-
             # f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
 
-            # f_t = 0.
-            # if args.normalize:
-            #     for state in range(ideal_f_t_mu.shape[0]):
-            #         f_t = (1 - ideal_f_t_gamma[state,0]) * ideal_f_t_i[state,0] +  (actor.pi(ideal_f_t_indices[state,:])[ideal_f_t_a[state,0]]/ideal_f_t_mu[state,0])*ideal_f_t_gamma[state,0]*f_t
-            # else:
-            #     for state in range(ideal_f_t_mu.shape[0]):
-            #         f_t = ideal_f_t_i[state,0] + (actor.pi(ideal_f_t_indices[state,:])[ideal_f_t_a[state,0]]/ideal_f_t_mu[state,0])*ideal_f_t_gamma[state,0]*f_t
-
-            rho_array = np.array([actor.pi(ideal_f_t_indices[state,:])[ideal_f_t_a[state]]/ideal_f_t_mu[state] for state in range(ideal_f_t_mu.shape[0])])
-            rho_g_array = rho_array * ideal_f_t_gamma
             if args.normalize:
-                i_array = (1. - ideal_f_t_gamma) * ideal_f_t_i
-            else:
-                i_array = ideal_f_t_i
-            f_t = 0.
-            for state in range(ideal_f_t_mu.shape[0]):
-                f_t = i_array[state] + rho_g_array[state]*f_t
+                assert not "implemented"
 
+            f_t = interest_0
+            if ideal_gamma is not None:
+                f_t = interest_0
+                rho_array = np.array([actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state] for state in range(ideal_indices.shape[0])])
+                rho_g_array = rho_array * ideal_gamma
+                for state in range(ideal_gamma.shape[0]):
+                    f_t = ideal_i[state] + rho_g_array[state]*f_t
 
             m_t = (1 - eta) * i_t + eta * f_t
 
@@ -139,16 +106,29 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                 critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
                 actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
 
-            gamma_t = gamma_tp1
-            indices_t = indices_tp1
-            if ideal_f_t_indices is None:
-                ideal_f_t_indices = indices_t.reshape((1,indices_t.shape[0]))
-                # ideal_f_t_gamma = np.array([gamma_t]).reshape((1,1))
-                ideal_f_t_gamma = np.array([gamma_t])
+            if gamma_tp1 == 0.0:
+                ideal_indices = None
+                ideal_gamma = None
+                ideal_mu = None
+                ideal_i = None
+                ideal_a = None
+                interest_0 = i(s_tp1, gamma_tp1)
             else:
-                ideal_f_t_indices = np.append(ideal_f_t_indices,indices_t.reshape((1,indices_t.shape[0])),axis=0)
-                # ideal_f_t_gamma = np.append(ideal_f_t_gamma, np.array([gamma_t]).reshape((1,1)), axis=0)
-                ideal_f_t_gamma = np.append(ideal_f_t_gamma, gamma_t)
+                if ideal_i is None:
+                    ideal_mu = np.array([mu_t[a_t]])
+                    ideal_a = np.array([a_t])
+                    ideal_indices = indices_t.reshape((1,indices_t.shape[0]))
+                    ideal_gamma = np.array([gamma_tp1])
+                    ideal_i = np.array([i(s_tp1, gamma_tp1)])
+                else:
+                    ideal_mu = np.append(ideal_mu, mu_t[a_t])
+                    ideal_a = np.append(ideal_a, a_t)
+                    ideal_indices = np.append(ideal_indices,indices_t.reshape((1,indices_t.shape[0])),axis=0)
+                    ideal_gamma = np.append(ideal_gamma, gamma_tp1)
+                    ideal_i = np.append(ideal_i, i(s_tp1, gamma_tp1))
+
+            indices_t = indices_tp1
+            gamma_t = gamma_tp1
 
             # rho_tm1 = rho_t
 
