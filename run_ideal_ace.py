@@ -86,10 +86,18 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             f_t = interest_0
             if ideal_gamma is not None:
                 f_t = interest_0
-                rho_array = np.array([actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state] for state in range(ideal_indices.shape[0])])
-                rho_g_array = rho_array * ideal_gamma
+
+                #--possibly faster
+                # rho_array = np.array([actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state] for state in range(ideal_indices.shape[0])])
+                # rho_g_array = rho_array * ideal_gamma
+                # for state in range(ideal_gamma.shape[0]):
+                #     f_t = ideal_i[state] + rho_g_array[state]*f_t
+                #-----
+
+                #--surprisingly, this version seems slower
                 for state in range(ideal_gamma.shape[0]):
-                    f_t = ideal_i[state] + rho_g_array[state]*f_t
+                    f_t = ideal_i[state] + ideal_gamma[state]*(actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state])*f_t
+                #-----
 
             m_t = (1 - eta) * i_t + eta * f_t
 
