@@ -87,16 +87,29 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             if ideal_gamma is not None:
                 f_t = interest_0
 
-                #--possibly faster
+                # # --faster
                 # rho_array = np.array([actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state] for state in range(ideal_indices.shape[0])])
                 # rho_g_array = rho_array * ideal_gamma
                 # for state in range(ideal_gamma.shape[0]):
                 #     f_t = ideal_i[state] + rho_g_array[state]*f_t
-                #-----
+                # # -----
 
-                #--surprisingly, this version seems slower
+                # #--seems slower
+                # for state in range(ideal_gamma.shape[0]):
+                #     f_t = ideal_i[state] + ideal_gamma[state]*(actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state])*f_t
+                # #-----
+
+                #--new functions
+                pis = actor.pi_matrix(ideal_indices)
+                pi_a = pis[np.arange(ideal_gamma.shape[0]), ideal_a]
+                rho_g_array = (pi_a/ideal_mu)*ideal_gamma
+                # print(rho_g_array.shape,ideal_gamma.shape)
+                if args.normalize:
+                    ideal_i_final = (1.-ideal_gamma) * ideal_i
+                else:
+                    ideal_i_final = ideal_i
                 for state in range(ideal_gamma.shape[0]):
-                    f_t = ideal_i[state] + ideal_gamma[state]*(actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state])*f_t
+                    f_t = ideal_i_final[state] + rho_g_array[state]*f_t
                 #-----
 
             m_t = (1 - eta) * i_t + eta * f_t
@@ -122,7 +135,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                 ideal_a = None
                 interest_0 = i(s_tp1, gamma_tp1)
             else:
-                if ideal_i is None:
+                if ideal_gamma is None:
                     ideal_mu = np.array([mu_t[a_t]])
                     ideal_a = np.array([a_t])
                     ideal_indices = indices_t.reshape((1,indices_t.shape[0]))
