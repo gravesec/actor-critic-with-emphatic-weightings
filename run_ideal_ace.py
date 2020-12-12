@@ -63,10 +63,10 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         interest_0 = i(transitions[0][0], gamma_t)
 
         for t, transition in enumerate(transitions):
-            # Save and evaluate the learned policy if it's a checkpoint timestep:
-            if t % args.checkpoint_interval == 0:
-                performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
-                policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
+            # # Save and evaluate the learned policy if it's a checkpoint timestep:
+            # if t % args.checkpoint_interval == 0:
+            #     performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+            #     policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
             # Unpack the stored transition.
             s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
@@ -80,37 +80,19 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
             # f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
 
-            if args.normalize:
-                assert not "implemented"
-
             f_t = interest_0
             if ideal_gamma is not None:
                 f_t = interest_0
 
-                # # --faster
-                # rho_array = np.array([actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state] for state in range(ideal_indices.shape[0])])
-                # rho_g_array = rho_array * ideal_gamma
-                # for state in range(ideal_gamma.shape[0]):
-                #     f_t = ideal_i[state] + rho_g_array[state]*f_t
-                # # -----
-
-                # #--seems slower
-                # for state in range(ideal_gamma.shape[0]):
-                #     f_t = ideal_i[state] + ideal_gamma[state]*(actor.pi(ideal_indices[state,:])[ideal_a[state]]/ideal_mu[state])*f_t
-                # #-----
-
-                #--new functions
-                pis = actor.pi_matrix(ideal_indices)
-                pi_a = pis[np.arange(ideal_gamma.shape[0]), ideal_a]
+                pi_probs = actor.pi_matrix(ideal_indices)
+                pi_a = pi_probs[np.arange(ideal_gamma.shape[0]), ideal_a]
                 rho_g_array = (pi_a/ideal_mu)*ideal_gamma
-                # print(rho_g_array.shape,ideal_gamma.shape)
                 if args.normalize:
                     ideal_i_final = (1.-ideal_gamma) * ideal_i
                 else:
                     ideal_i_final = ideal_i
                 for state in range(ideal_gamma.shape[0]):
                     f_t = ideal_i_final[state] + rho_g_array[state]*f_t
-                #-----
 
             m_t = (1 - eta) * i_t + eta * f_t
 

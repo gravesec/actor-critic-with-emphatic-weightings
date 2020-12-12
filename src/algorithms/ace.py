@@ -50,9 +50,9 @@ class BinaryACE:
         for i in range(features_matrix.shape[0]):
             preferences[i,:] = self.theta[:, features_matrix[i,:]].sum(axis=1)
         # Converts potential overflows of the largest probability into underflows of the lowest probability:
-        preferences = preferences - np.max(preferences,axis=1)
+        preferences = preferences - (np.max(preferences,axis=1)[...,np.newaxis])
         exp_preferences = np.exp(preferences)
-        return exp_preferences / np.sum(exp_preferences,axis=1)
+        return exp_preferences / (np.sum(exp_preferences,axis=1)[...,np.newaxis])
 
     def learn(self, indices_t, a_t, delta_t, m_t, rho_t):
     #     M_t = (1 - eta) * i_t + eta * f_t
