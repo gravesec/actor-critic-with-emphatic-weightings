@@ -16,6 +16,7 @@ from evaluate_policies import evaluate_policy, evaluate_policy_avg_return
 
 
 def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
+
     # If this run and configuration has already been done (i.e., previous run timed out), exit early:
     if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
         return
@@ -54,14 +55,6 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         f_t = 0.
         rho_tm1 = 1.
         indices_t = tc.encode(transitions[0][0])
-
-        ideal_indices = None
-        ideal_gamma = None
-        ideal_mu = None
-        ideal_i = None
-        ideal_a = None
-        interest_0 = i(transitions[0][0], gamma_t)
-
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
@@ -79,24 +72,8 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             mu_t = mu(s_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
 
-            # f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
-
-            f_t = interest_0
-            if ideal_gamma is not None:
-                f_t = interest_0
-
-                pi_probs = actor.pi_matrix(ideal_indices)
-                pi_a = pi_probs[np.arange(ideal_gamma.shape[0]), ideal_a]
-                rho_g_array = (pi_a/ideal_mu)*ideal_gamma
-                if args.normalize:
-                    ideal_i_final = (1.-ideal_gamma) * ideal_i
-                else:
-                    ideal_i_final = ideal_i
-                for state in range(ideal_gamma.shape[0]):
-                    f_t = ideal_i_final[state] + rho_g_array[state]*f_t
-
+            f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
             m_t = (1 - eta) * i_t + eta * f_t
-
             if args.all_actions:
                 critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
                 q_t = critic.estimate(indices_t)
@@ -110,32 +87,9 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                 critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
                 actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
 
-            if gamma_tp1 == 0.0:
-                ideal_indices = None
-                ideal_gamma = None
-                ideal_mu = None
-                ideal_i = None
-                ideal_a = None
-                interest_0 = i(s_tp1, gamma_tp1)
-            else:
-                if ideal_gamma is None:
-                    ideal_mu = np.array([mu_t[a_t]])
-                    ideal_a = np.array([a_t])
-                    ideal_indices = indices_t.reshape((1,indices_t.shape[0]))
-                    ideal_gamma = np.array([gamma_tp1])
-                    ideal_i = np.array([i(s_tp1, gamma_tp1)])
-                else:
-                    ideal_mu = np.append(ideal_mu, mu_t[a_t])
-                    ideal_a = np.append(ideal_a, a_t)
-                    ideal_indices = np.append(ideal_indices,indices_t.reshape((1,indices_t.shape[0])),axis=0)
-                    ideal_gamma = np.append(ideal_gamma, gamma_tp1)
-                    ideal_i = np.append(ideal_i, i(s_tp1, gamma_tp1))
-
-            indices_t = indices_tp1
             gamma_t = gamma_tp1
-
-            # rho_tm1 = rho_t
-
+            indices_t = indices_tp1
+            rho_tm1 = rho_t
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
         # performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]

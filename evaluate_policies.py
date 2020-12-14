@@ -29,6 +29,26 @@ def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, rend
     return g_t
 
 
+def evaluate_policy_avg_return(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
+    env = gym.make('MountainCar-v0').unwrapped if env is None else env
+    g_t = 0.
+    indices_t = tc.encode(env.reset())
+    num_episodes = 0
+    for t in range(num_timesteps):
+        a_t = rng.choice(env.action_space.n, p=actor.pi(indices_t))
+        s_tp1, r_tp1, terminal, _ = env.step(a_t)
+        indices_t = tc.encode(s_tp1)
+        g_t += r_tp1
+        if terminal:
+            num_episodes += 1
+        if render:
+            env.render()
+    if num_episodes > 1:
+        return g_t/num_episodes
+    else:
+        return g_t
+
+
 def evaluate_policies(policies_memmap, performance_memmap, evaluation_run_num, ace_run_num, config_num, policy_num, random_seed):
 
     if evaluation_run_num == 0:
