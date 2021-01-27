@@ -1,7 +1,6 @@
 import os
 import gym
 import gym_puddle
-import gym_virtual_office
 import random
 import argparse
 import numpy as np
