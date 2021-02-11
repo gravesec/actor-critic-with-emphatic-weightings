@@ -121,8 +121,8 @@ class puddleworld():
         xpos = s[0]
         ypos = s[1]
 
-        nx = self.np_random_trans.normal(scale=self.sigma)
-        ny = self.np_random_trans.normal(scale=self.sigma)
+        nx = self.np_random.normal(scale=self.sigma)
+        ny = self.np_random.normal(scale=self.sigma)
 
         if a == 0: #up
             ny += self.def_displacement
