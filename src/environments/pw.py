@@ -121,19 +121,20 @@ class puddleworld():
         xpos = s[0]
         ypos = s[1]
 
-        n = self.np_random.normal(scale=self.sigma)
+        nx = self.np_random_trans.normal(scale=self.sigma)
+        ny = self.np_random_trans.normal(scale=self.sigma)
 
         if a == 0: #up
-            ypos += self.def_displacement
+            ny += self.def_displacement
         elif a == 1: #down
-            ypos -= self.def_displacement
+            ny -= self.def_displacement
         elif a == 2: #right
-            xpos += self.def_displacement
+            nx += self.def_displacement
         else: #left
-            xpos -= self.def_displacement
+            nx -= self.def_displacement
 
-        xpos += n
-        ypos += n
+        xpos += nx
+        ypos += ny
 
         if xpos > self.pworld_max_x:
             xpos = self.pworld_max_x
