@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     # Script parameters:
     parser.add_argument('--seconds_per_combination', type=float, default=80, help='Predicted time in seconds it takes for a single parameter combination to run once on a node. To estimate this, run an experiment script on one node for ~15 minutes and check the output; tqdm reports seconds per iteration.')
-    parser.add_argument('--num_hours', type=int, default=1, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
+    parser.add_argument('--num_hours', type=int, default=12, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
     parser.add_argument('--email', type=str, default='graves@ualberta.ca', help='Email address to report updates to.')
     parser.add_argument('--account', type=str, default='def-sutton', help='Allocation string to use in slurm.')
     parser.add_argument('--cores_per_node', type=int, default=80, help='Number of cores per node on the cluster. Niagara is 40 or 80 with hyperthreading.')
