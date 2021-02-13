@@ -13,19 +13,53 @@ from src.algorithms.etd import LinearETD
 from src.algorithms.tdc import LinearTDC
 
 
-def evaluate_policy(actor, env=None, rng=np.random, num_timesteps=1000, render=False):
-    env = gym.make('VirtualOffice-v0').unwrapped if env is None else env
-    g_t = 0.
-    obs_t = env.reset()
-    for t in range(num_timesteps):
-        a_t = rng.choice(env.action_space.n, p=actor.pi(obs_t))
-        obs_tp1, r_tp1, terminal, _ = env.step(a_t)
-        g_t += r_tp1
+def generate_experience(experience, run_num, random_seed):
+    # Initialize an environment:
+    import gym_virtual_office  # Re-import the env in each subprocess or it sometimes isn't found during creation.
+    env = gym.make(args.environment).unwrapped
+    env.seed(random_seed)
+    rng = env.np_random
+
+    # Create the behaviour policy:
+    mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Give the eval'd function access to some objects.
+
+    # Generate the required timesteps of experience:
+    o_t = env.reset()['image'].ravel()
+    o_t = o_t / np.linalg.norm(o_t)  # normalize feature vector
+    a_t = rng.choice(env.action_space.n, p=mu(o_t))
+    for t in range(args.num_timesteps):
+        # Take action a_t, observe next state o_tp1 and reward r_tp1:
+        o_tp1, r_tp1, terminal, _ = env.step(a_t)
+        o_tp1 = o_tp1['image'].ravel()
+        o_tp1 = o_tp1 / np.linalg.norm(o_tp1)  # normalize feature vector
+
+        # The agent is reset to a starting state after a terminal transition:
+        if terminal:
+            o_tp1 = env.reset()['image'].ravel()
+            o_tp1 = o_tp1 / np.linalg.norm(o_tp1)  # normalize feature vector
+
+        a_tp1 = rng.choice(env.action_space.n, p=mu(o_t))
+
+        # Add the transition to the memmap:
+        experience[run_num, t] = (o_t, a_t, r_tp1, o_tp1, a_tp1, terminal)
+
+        # Update temporary variables:
+        o_t = o_tp1
+        a_t = a_tp1
+
+
+def evaluate_policy(actor, env, rng):
+    g = 0.
+    o_t = env.reset()['image'].ravel()
+    for t in range(args.max_timesteps):
+        a_t = rng.choice(env.action_space.n, p=actor.pi(o_t))
+        o_tp1, r_tp1, terminal, _ = env.step(a_t)
+        o_tp1 = o_tp1['image'].ravel()
+        o_t = o_tp1
+        g += r_tp1
         if terminal:
             break
-        if render:
-            env.render()
-    return g_t
+    return g
 
 
 def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
@@ -41,19 +75,16 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         performance_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma)
 
     # Create the environment to evaluate the learned policy in:
-    import gym_puddle
     import gym_virtual_office
     env = gym.make(args.environment).unwrapped
     env.seed(random_seed)
     rng = env.np_random
 
-    actor = LinearACE(env.action_space.n, env.observation_space., alpha_a / tc.num_active_features)
-    if args.all_actions:
-        critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
-    elif args.critic == 'ETD':
-        critic = BinaryETD(tc.total_num_tiles, alpha_w / tc.num_active_features, lambda_c)
+    actor = LinearACE(env.action_space.n, dummy_obs.size, alpha_a)
+    if args.critic == 'ETD':
+        critic = LinearETD(dummy_obs.size, alpha_w, lambda_c)
     else:
-        critic = BinaryTDC(tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
+        critic = LinearTDC(dummy_obs.size, alpha_w, alpha_v, lambda_c)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
@@ -67,44 +98,37 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         gamma_t = 0.
         f_t = 0.
         rho_tm1 = 1.
-        indices_t = tc.encode(transitions[0][0])
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
-                performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+                performance[t // args.checkpoint_interval] = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)]
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
             # Unpack the stored transition.
-            s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
+            o_t, a_t, r_tp1, o_tp1, a_tp1, terminal = transition
             gamma_tp1 = args.gamma if not terminal else 0  # Transition-dependent discounting.
-            indices_tp1 = tc.encode(s_tp1)
-            i_t = i(s_t, gamma_t)
+            i_t = i(o_t, gamma_t)
             # Compute importance sampling ratio for the policy:
-            pi_t = actor.pi(indices_t)
-            mu_t = mu(s_t)
+            pi_t = actor.pi(o_t)
+            mu_t = mu(o_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
 
             f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
             m_t = (1 - eta) * i_t + eta * f_t
-            if args.all_actions:
-                critic.learn(indices_t, a_t, rho_t, gamma_t, r_tp1, indices_tp1, actor.pi(indices_tp1), gamma_tp1)
-                q_t = critic.estimate(indices_t)
-                actor.all_actions_learn(indices_t, q_t, m_t)
-            elif args.critic == 'ETD':
-                delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
-                critic.learn(delta_t, indices_t, gamma_t, i_t, rho_t, f_t)
-                actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
+            if args.critic == 'ETD':
+                delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
+                critic.learn(delta_t, o_t, gamma_t, i_t, rho_t, f_t)
+                actor.learn(o_t, a_t, delta_t, m_t, rho_t)
             else:
-                delta_t = r_tp1 + gamma_tp1 * critic.estimate(indices_tp1) - critic.estimate(indices_t)
-                critic.learn(delta_t, indices_t, gamma_t, indices_tp1, gamma_tp1, rho_t)
-                actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
+                delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
+                critic.learn(delta_t, o_t, gamma_t, o_tp1, gamma_tp1, rho_t)
+                actor.learn(o_t, a_t, delta_t, m_t, rho_t)
 
             gamma_t = gamma_tp1
-            indices_t = indices_tp1
             rho_tm1 = rho_t
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
-        performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+        performance[-1] = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)]
 
         # Save the learned policies and their performance to the memmap:
         performance_memmap[config_num]['results'][run_num] = performance
@@ -117,79 +141,99 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
     parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experiment/experience.npy', help='The file to read experience from')
-    parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
-
-    # Policy evaluation parameters:
-    parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
-    parser.add_argument('--num_evaluation_runs', type=int, default=5, help='The number of times to evaluate each policy')
-    parser.add_argument('--max_timesteps', type=int, default=5000, help='The maximum number of timesteps allowed per policy evaluation')
+    parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
+    parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
-
-    # Experiment parameters:
+    parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
+    parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--num_evaluation_runs', type=int, default=10, help='The number of times to evaluate each policy')
+    parser.add_argument('--max_timesteps', type=int, default=5000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--critic', type=str, choices=['TDC', 'ETD'], default='TDC', help='Which critic to use.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
-    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.ones(env.action_space.n)/env.action_space.n', help='Policy to use. Default is uniform random. Another Example: \'lambda s: np.array([.9, .05, .05]) if s[1] < 0 else np.array([.05, .05, .9]) \' (energy pumping policy w/ 15 percent randomness)')
+    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([.2, .25, .3, .25])', help='Policy to use. Default is uniform random, slightly biased towards the \'south\' action.')
     parser.add_argument('--environment', type=str, default='VirtualOffice-v0', help='An OpenAI Gym environment string.')
-    parser.add_argument('--gamma', '--discount_rate', type=float, default=.99, help='Discount rate.')
+    parser.add_argument('--gamma', '--discount_rate', type=float, default=.9, help='Discount rate.')
     parser.add_argument('-p', '--parameters', type=float, nargs=5, action='append', metavar=('alpha_a', 'alpha_w', 'alpha_v', 'lambda', 'eta'), help='Parameters to use. Can be specified multiple times to run multiple configurations in parallel.')
     args, unknown_args = parser.parse_known_args()
 
     # Generate the random seed for each run without replacement to prevent the birthday paradox:
     random.seed(args.random_seed)
-    random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
+    random_seeds = random.sample(range(2**32), args.num_runs)
 
     # Save the command line arguments in a format interpretable by argparse:
     output_dir = Path(args.output_dir)
     utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
 
-    # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
-    experience_memmap = np.lib.format.open_memmap(args.experience_file, mode='r')
-    num_runs, num_timesteps = experience_memmap.shape
+    # Make a dummy env to get action/observation shape info.
+    dummy_env = gym.make(args.environment).unwrapped
+    dummy_obs = dummy_env.reset()['image'].ravel()
+    num_policies = args.num_timesteps // args.checkpoint_interval + 1
 
-    # Create the memmapped array of learned policies that will be populated in parallel:
-    parameters_dtype = np.dtype([
-        ('alpha_a', float),
-        ('alpha_w', float),
-        ('alpha_v', float),
-        ('lambda', float),
-        ('eta', float),
-        ('gamma', float),
-    ])
-    dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
-    dummy_obs = dummy_env.reset()['image']
-    policy_dtype = np.dtype([
-        ('timesteps', int),
-        ('weights', float, (dummy_env.action_space.n, *dummy_obs.shape))
-    ])
-    num_policies = num_timesteps // args.checkpoint_interval + 1
-    configuration_dtype = np.dtype([
-        ('parameters', parameters_dtype),
-        ('policies', policy_dtype, (num_runs, num_policies))
-    ])
+    # If the input file already exists:
+    if os.path.isfile(args.experience_file):
+        # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
+        experience_memmap = np.lib.format.open_memmap(args.experience_file, mode='r')
+    else:
+        # otherwise, create it and populate it:
+        transition_dtype = np.dtype([
+            ('s_t', float, dummy_obs.size),
+            ('a_t', int),
+            ('r_tp1', float),
+            ('s_tp1', float, dummy_obs.size),
+            ('a_tp1', int),
+            ('terminal', bool)
+        ])
+        experience_memmap = np.lib.format.open_memmap(args.experience_file, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
+        with utils.tqdm_joblib(tqdm(total=args.num_runs)) as progress_bar:
+            Parallel(n_jobs=args.num_cpus, verbose=0)(
+                delayed(generate_experience)(experience_memmap, run_num, random_seed)
+                for run_num, random_seed in enumerate(random_seeds)
+            )
+
+    # If the file for storing learned policies already exists:
     policies_memmap_path = str(output_dir / 'policies.npy')
     if os.path.isfile(policies_memmap_path):
+        # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, mode='r+')
     else:
+        # otherwise, create it:
+        parameters_dtype = np.dtype([
+            ('alpha_a', float),
+            ('alpha_w', float),
+            ('alpha_v', float),
+            ('lambda', float),
+            ('eta', float),
+            ('gamma', float),
+        ])
+        policy_dtype = np.dtype([
+            ('timesteps', int),
+            ('weights', float, (dummy_env.action_space.n, dummy_obs.size))
+        ])
+        configuration_dtype = np.dtype([
+            ('parameters', parameters_dtype),
+            ('policies', policy_dtype, (args.num_runs, num_policies)),
+        ])
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, shape=(len(args.parameters),), dtype=configuration_dtype, mode='w+')
 
-    # Create the memmapped array of performance results for the learned policies:
-    performance_dtype = np.dtype([
-        ('parameters', parameters_dtype),
-        ('results', float, (num_runs, num_policies, args.num_evaluation_runs))
-    ])
-    performance_memmap_path = str(output_dir / 'performance.npy')
+    # If the file for storing the performance results for the learned policies already exists:
+    performance_memmap_path = str(output_dir / 'episodic_performance.npy')
     if os.path.isfile(performance_memmap_path):
+        # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
     else:
+        # otherwise, create it:
+        performance_dtype = np.dtype([
+            ('parameters', parameters_dtype),
+            ('results', float, (args.num_runs, num_policies, args.num_evaluation_runs))
+        ])
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
 
     # Run ACE for each configuration in parallel:
-    with utils.tqdm_joblib(tqdm(total=num_runs * len(args.parameters))) as progress_bar:
+    with utils.tqdm_joblib(tqdm(total=args.num_runs * len(args.parameters))) as progress_bar:
         Parallel(n_jobs=args.num_cpus, verbose=0)(
             delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed)
             for config_num, parameters in enumerate(args.parameters)
