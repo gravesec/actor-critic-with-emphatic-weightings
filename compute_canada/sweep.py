@@ -5,6 +5,7 @@ import random
 import argparse
 import itertools
 import numpy as np
+from src import utils
 from pathlib import Path
 
 
@@ -15,7 +16,8 @@ if __name__ == '__main__':
     parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
 
-    parser.add_argument('--num_runs', type=int, default=10, help='The number of independent runs to do')
+    parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
+    parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_evaluation_runs', type=int, default=10, help='The number of times to evaluate each policy')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
@@ -39,12 +41,16 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
 
     # Script parameters:
-    parser.add_argument('--seconds_per_combination', type=float, default=80, help='Predicted time in seconds it takes for a single parameter combination to run once on a node. To estimate this, run an experiment script on one node for ~15 minutes and check the output; tqdm reports seconds per iteration.')
+    parser.add_argument('--seconds_per_combination', type=float, default=.125, help='Predicted time in seconds it takes for a single parameter combination to run once on a node. To estimate this, run an experiment script on one node for ~15 minutes and check the output; tqdm reports seconds per iteration.')
     parser.add_argument('--num_hours', type=int, default=12, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
     parser.add_argument('--email', type=str, default='graves@ualberta.ca', help='Email address to report updates to.')
     parser.add_argument('--account', type=str, default='def-sutton', help='Allocation string to use in slurm.')
     parser.add_argument('--cores_per_node', type=int, default=80, help='Number of cores per node on the cluster. Niagara is 40 or 80 with hyperthreading.')
     args = parser.parse_args()
+
+    # Save the command line arguments in a format interpretable by argparse:
+    output_dir = Path(args.output_dir)
+    utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
 
     # If using ETD critic, alpha_v is ignored, so make sure we don't run extra parameter combinations:
     if args.critic == 'ETD':
@@ -61,8 +67,6 @@ if __name__ == '__main__':
         exit(0)
 
     # Generate the scripts:
-    output_dir = Path(args.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
     random.shuffle(combinations)  # Shuffle parameter combinations to make sure each node finishes in roughly the same amount of time.
     node_configs = np.array_split(combinations, num_nodes)  # Split the combinations evenly-ish across nodes.
     script_names = []
@@ -85,6 +89,8 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --output_dir \'sweep{script_num}\' \\
 --experience_file \'{args.experience_file}\' \\
 --num_cpus {args.num_cpus} \\
+--num_runs {args.num_runs} \\
+--num_timesteps {args.num_timesteps} \\
 --checkpoint_interval {args.checkpoint_interval} \\
 --num_evaluation_runs {args.num_evaluation_runs} \\
 --max_timesteps {args.max_timesteps} \\
