@@ -142,8 +142,8 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
-    parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
-    parser.add_argument('--experience_file', type=str, default='experiment/experience.npy', help='The file to read experience from')
+    parser.add_argument('--output_dir', type=str, default='experiments', help='The directory to write experiment files to')
+    parser.add_argument('--experience_file', type=str, default='experiments/experience.npy', help='The file to read experience from')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
