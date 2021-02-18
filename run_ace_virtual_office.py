@@ -143,7 +143,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
     parser.add_argument('--output_dir', type=str, default='experiments', help='The directory to write experiment files to')
-    parser.add_argument('--experience_file', type=str, default='experiments/experience.npy', help='The file to read experience from')
+    parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
@@ -174,9 +174,9 @@ if __name__ == '__main__':
     num_policies = args.num_timesteps // args.checkpoint_interval + 1
 
     # If the input file already exists:
-    if os.path.isfile(args.experience_file):
+    if os.path.isfile(output_dir / args.experience_file):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
-        experience_memmap = np.lib.format.open_memmap(args.experience_file, mode='r')
+        experience_memmap = np.lib.format.open_memmap(output_dir / args.experience_file, mode='r')
     else:
         # otherwise, create it and populate it:
         transition_dtype = np.dtype([
@@ -187,7 +187,7 @@ if __name__ == '__main__':
             ('a_tp1', int),
             ('terminal', bool)
         ])
-        experience_memmap = np.lib.format.open_memmap(args.experience_file, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
+        experience_memmap = np.lib.format.open_memmap(output_dir / args.experience_file, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
         with utils.tqdm_joblib(tqdm(total=args.num_runs)) as progress_bar:
             Parallel(n_jobs=args.num_cpus, verbose=0)(
                 delayed(generate_experience)(experience_memmap, run_num, random_seed)
