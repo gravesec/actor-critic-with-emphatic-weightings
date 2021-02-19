@@ -154,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--critic', type=str, choices=['TDC', 'ETD'], default='TDC', help='Which critic to use.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
-    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([.2, .25, .3, .25])', help='Policy to use. Default is uniform random, slightly biased towards the \'south\' action.')
+    parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([.2, .3, .3, .2])', help='Policy to use. Default is uniform random, slightly biased towards the \'south\' action.')
     parser.add_argument('--environment', type=str, default='VirtualOffice-v0', help='An OpenAI Gym environment string.')
     parser.add_argument('--gamma', '--discount_rate', type=float, default=.9, help='Discount rate.')
     parser.add_argument('-p', '--parameters', type=float, nargs=5, action='append', metavar=('alpha_a', 'alpha_w', 'alpha_v', 'lambda', 'eta'), help='Parameters to use. Can be specified multiple times to run multiple configurations in parallel.')
@@ -174,19 +174,19 @@ if __name__ == '__main__':
     num_policies = args.num_timesteps // args.checkpoint_interval + 1
 
     # If the input file already exists:
+    transition_dtype = np.dtype([
+        ('s_t', float, dummy_obs.size),
+        ('a_t', int),
+        ('r_tp1', float),
+        ('s_tp1', float, dummy_obs.size),
+        ('a_tp1', int),
+        ('terminal', bool)
+    ])
     if os.path.isfile(output_dir / args.experience_file):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         experience_memmap = np.lib.format.open_memmap(output_dir / args.experience_file, mode='r')
     else:
-        # otherwise, create it and populate it:
-        transition_dtype = np.dtype([
-            ('s_t', float, dummy_obs.size),
-            ('a_t', int),
-            ('r_tp1', float),
-            ('s_tp1', float, dummy_obs.size),
-            ('a_tp1', int),
-            ('terminal', bool)
-        ])
+        # otherwise, create it and populate it in parallel:
         experience_memmap = np.lib.format.open_memmap(output_dir / args.experience_file, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
         with utils.tqdm_joblib(tqdm(total=args.num_runs)) as progress_bar:
             Parallel(n_jobs=args.num_cpus, verbose=0)(
@@ -196,40 +196,40 @@ if __name__ == '__main__':
 
     # If the file for storing learned policies already exists:
     policies_memmap_path = str(output_dir / 'policies.npy')
+    parameters_dtype = np.dtype([
+        ('alpha_a', float),
+        ('alpha_w', float),
+        ('alpha_v', float),
+        ('lambda', float),
+        ('eta', float),
+        ('gamma', float),
+    ])
+    policy_dtype = np.dtype([
+        ('timesteps', int),
+        ('weights', float, (dummy_env.action_space.n, dummy_obs.size))
+    ])
+    configuration_dtype = np.dtype([
+        ('parameters', parameters_dtype),
+        ('policies', policy_dtype, (args.num_runs, num_policies)),
+    ])
     if os.path.isfile(policies_memmap_path):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, mode='r+')
     else:
         # otherwise, create it:
-        parameters_dtype = np.dtype([
-            ('alpha_a', float),
-            ('alpha_w', float),
-            ('alpha_v', float),
-            ('lambda', float),
-            ('eta', float),
-            ('gamma', float),
-        ])
-        policy_dtype = np.dtype([
-            ('timesteps', int),
-            ('weights', float, (dummy_env.action_space.n, dummy_obs.size))
-        ])
-        configuration_dtype = np.dtype([
-            ('parameters', parameters_dtype),
-            ('policies', policy_dtype, (args.num_runs, num_policies)),
-        ])
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, shape=(len(args.parameters),), dtype=configuration_dtype, mode='w+')
 
     # If the file for storing the performance results for the learned policies already exists:
     performance_memmap_path = str(output_dir / 'episodic_performance.npy')
+    performance_dtype = np.dtype([
+        ('parameters', parameters_dtype),
+        ('results', float, (args.num_runs, num_policies, args.num_evaluation_runs))
+    ])
     if os.path.isfile(performance_memmap_path):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
     else:
         # otherwise, create it:
-        performance_dtype = np.dtype([
-            ('parameters', parameters_dtype),
-            ('results', float, (args.num_runs, num_policies, args.num_evaluation_runs))
-        ])
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
 
     # Run ACE for each configuration in parallel:
