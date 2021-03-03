@@ -89,8 +89,8 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
 
-    policies = np.zeros(num_policies, dtype=policy_dtype)
-    performance = np.zeros((num_policies, args.num_evaluation_runs), dtype=float)
+    policies = np.zeros(num_policies, dtype=policies_dtype)
+    performance = np.zeros(num_policies, dtype=results_dtype)
 
     np.seterr(divide='raise', over='raise', invalid='raise')
     try:
@@ -101,7 +101,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
-                performance[t // args.checkpoint_interval] = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)]
+                performance[t // args.checkpoint_interval] = (t, [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)])
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
             # Unpack the stored transition.
@@ -128,21 +128,21 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             rho_tm1 = rho_t
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
-        performance[-1] = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)]
+        performance[-1] = (t+1, [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)])
 
         # Save the learned policies and their performance to the memmap:
-        performance_memmap[config_num]['results'][run_num] = performance
+        performance_memmap[config_num]['performance'][run_num] = performance
         policies_memmap[config_num]['policies'][run_num] = policies
     except (FloatingPointError, ValueError) as e:
         # Save NaN to indicate the weights overflowed and exit early:
-        performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
+        performance_memmap[config_num]['performance'][run_num] = np.full_like(performance, np.NaN)
         policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
         return
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
-    parser.add_argument('--output_dir', type=str, default='experiments', help='The directory to write experiment files to')
+    parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
@@ -194,7 +194,7 @@ if __name__ == '__main__':
                 for run_num, random_seed in enumerate(random_seeds)
             )
 
-    # If the file for storing learned policies already exists:
+    # Create or load the file for storing learned policies:
     policies_memmap_path = str(output_dir / 'policies.npy')
     parameters_dtype = np.dtype([
         ('alpha_a', float),
@@ -202,16 +202,17 @@ if __name__ == '__main__':
         ('alpha_v', float),
         ('lambda', float),
         ('eta', float),
-        ('gamma', float),
+        ('gamma', float)
     ])
-    policy_dtype = np.dtype([
+    policies_dtype = np.dtype([
         ('timesteps', int),
         ('weights', float, (dummy_env.action_space.n, dummy_obs.size))
     ])
     configuration_dtype = np.dtype([
         ('parameters', parameters_dtype),
-        ('policies', policy_dtype, (args.num_runs, num_policies)),
+        ('policies', policies_dtype, (args.num_runs, num_policies))
     ])
+    # If the file for storing learned policies already exists:
     if os.path.isfile(policies_memmap_path):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, mode='r+')
@@ -219,12 +220,17 @@ if __name__ == '__main__':
         # otherwise, create it:
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, shape=(len(args.parameters),), dtype=configuration_dtype, mode='w+')
 
-    # If the file for storing the performance results for the learned policies already exists:
+    # Create or load the file for storing policy performance results:
     performance_memmap_path = str(output_dir / 'episodic_performance.npy')
+    results_dtype = np.dtype([
+        ('timesteps', int),
+        ('results', float, args.num_evaluation_runs)
+    ])
     performance_dtype = np.dtype([
         ('parameters', parameters_dtype),
-        ('results', float, (args.num_runs, num_policies, args.num_evaluation_runs))
+        ('performance', results_dtype, (args.num_runs, num_policies))
     ])
+    # If the file for storing the performance results for the learned policies already exists:
     if os.path.isfile(performance_memmap_path):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, mode='r+')
