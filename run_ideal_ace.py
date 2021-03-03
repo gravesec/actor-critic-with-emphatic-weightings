@@ -51,9 +51,11 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     try:
         transitions = experience_memmap[run_num]
         gamma_t = 0.
-        f_t = 0.
-        rho_tm1 = 1.
         indices_t = tc.encode(transitions[0][0])
+
+        # for t, transition in enumerate(transitions):
+        #     if transition[5]:
+        #         print("terminal",t)
 
         ideal_indices = None
         ideal_gamma = None
@@ -62,12 +64,15 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         ideal_a = None
         interest_0 = i(transitions[0][0], gamma_t)
 
+
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
-                # performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
-                performance[t // args.checkpoint_interval] = [evaluate_policy_avg_return(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+                # print(t // args.checkpoint_interval,t)
+                performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+                # performance[t // args.checkpoint_interval] = [evaluate_policy_avg_return(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
+                # print(run_num, t // args.checkpoint_interval, performance[t // args.checkpoint_interval])
 
             # Unpack the stored transition.
             s_t, a_t, r_tp1, s_tp1, a_tp1, terminal = transition
@@ -78,8 +83,6 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             pi_t = actor.pi(indices_t)
             mu_t = mu(s_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
-
-            # f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
 
             f_t = interest_0
             if ideal_gamma is not None:
@@ -94,6 +97,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                     ideal_i_final = ideal_i
                 for state in range(ideal_gamma.shape[0]):
                     f_t = ideal_i_final[state] + rho_g_array[state]*f_t
+                    # f_t = 1
 
             m_t = (1 - eta) * i_t + eta * f_t
 
@@ -111,6 +115,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                 actor.learn(indices_t, a_t, delta_t, m_t, rho_t)
 
             if gamma_tp1 == 0.0:
+                # print("terminal!",t)
                 ideal_indices = None
                 ideal_gamma = None
                 ideal_mu = None
@@ -134,21 +139,20 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             indices_t = indices_tp1
             gamma_t = gamma_tp1
 
-            # rho_tm1 = rho_t
-
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
-        # performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
-        performance[-1] = [evaluate_policy_avg_return(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+        performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+        # performance[-1] = [evaluate_policy_avg_return(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+        # print(run_num, -1, performance[-1])
 
         # Save the learned policies and their performance to the memmap:
         performance_memmap[config_num]['results'][run_num] = performance
         policies_memmap[config_num]['policies'][run_num] = policies
     except (FloatingPointError, ValueError) as e:
         # Save NaN to indicate the weights overflowed and exit early:
+        print("Floating point error: ", parameters, run_num)
         performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
         policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
-        return
 
 
 if __name__ == '__main__':
@@ -178,6 +182,10 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
     args, unknown_args = parser.parse_known_args()
 
+    # # Generate the random seed for each run without replacement to prevent the birthday paradox:
+    # random.seed(args.random_seed)
+    # random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
+
     # Save the command line arguments in a format interpretable by argparse:
     output_dir = Path(args.output_dir)
     utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
@@ -185,6 +193,7 @@ if __name__ == '__main__':
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
     experience_memmap = np.lib.format.open_memmap(args.experience_file, mode='r')
     num_runs, num_timesteps = experience_memmap.shape
+    # num_runs = 1
 
     # Generate the random seed for each run without replacement to prevent the birthday paradox:
     random.seed(args.random_seed)
@@ -239,3 +248,6 @@ if __name__ == '__main__':
             for config_num, parameters in enumerate(args.parameters)
             for run_num, random_seed in enumerate(random_seeds)
         )
+
+    # for i in range(num_runs):
+    #     print(performance_memmap[0]['results'][i])
