@@ -82,7 +82,7 @@ def generate_experience_test(experience, run_num, random_seed):
         #adds every 1000th state as an evaluation state
         if step % 1000 == 0:
             # Add the transition:
-            experience[run_num, t] = (s_t)
+            experience[run_num, t] = (s_t,)
             step = 0
             t += 1
 
