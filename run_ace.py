@@ -11,6 +11,7 @@ from joblib import Parallel, delayed
 from src.algorithms.ace import BinaryACE
 from src.algorithms.etd import BinaryETD
 from src.algorithms.tdc import BinaryTDC, BinaryGQ
+from src.algorithms.tdrc import BinaryTDRC
 from src.function_approximation.tile_coder import TileCoder
 from evaluate_policies import evaluate_policy
 
@@ -37,6 +38,8 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     actor = BinaryACE(env.action_space.n, tc.total_num_tiles, alpha_a / tc.num_active_features)
     if args.all_actions:
         critic = BinaryGQ(env.action_space.n, tc.total_num_tiles, alpha_w / tc.num_active_features, alpha_v / tc.num_active_features, lambda_c)
+    elif args.critic == 'TDRC':
+        critic = BinaryTDRC(tc.total_num_tiles, alpha_w / tc.num_active_features, lambda_c)
     elif args.critic == 'ETD':
         critic = BinaryETD(tc.total_num_tiles, alpha_w / tc.num_active_features, lambda_c)
     else:
@@ -131,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
 
     # Experiment parameters:
-    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD'], default='TDC', help='Which critic to use.')
+    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD', 'TDRC'], default='TDC', help='Which critic to use.')
     parser.add_argument('--all_actions', type=int, choices=[0, 1], default=0, help='Use all-actions updates instead of TD error-based updates.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
