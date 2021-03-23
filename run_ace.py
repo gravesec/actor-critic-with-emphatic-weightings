@@ -15,7 +15,8 @@ from src.function_approximation.tile_coder import TileCoder
 from evaluate_policies import evaluate_policy
 
 
-def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
+def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test, num_test_eval):
+
     # If this run and configuration has already been done (i.e., previous run timed out), exit early:
     if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
         return
@@ -46,6 +47,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
     policies = np.zeros(num_policies, dtype=policy_dtype)
     performance = np.zeros((num_policies, args.num_evaluation_runs), dtype=float)
+    performance_excursions = np.zeros((num_policies, num_test_eval), dtype=float)
 
     np.seterr(divide='raise', over='raise', invalid='raise')
     try:
@@ -58,6 +60,11 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
                 performance[t // args.checkpoint_interval] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+                perf_excursions = []
+                for sample in range(num_test_eval):
+                    env.set_state(experience_memmap_test[run_num][sample][0])
+                    perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps))
+                performance_excursions[t // args.checkpoint_interval] = perf_excursions
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
             # Unpack the stored transition.
@@ -91,13 +98,20 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
         performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
+        perf_excursions = []
+        for sample in range(num_test_eval):
+            env.set_state(experience_memmap_test[run_num][sample][0])
+            perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps))
+        performance_excursions[-1] = perf_excursions
 
         # Save the learned policies and their performance to the memmap:
         performance_memmap[config_num]['results'][run_num] = performance
+        performance_memmap[config_num]['results_excursions'][run_num] = performance_excursions
         policies_memmap[config_num]['policies'][run_num] = policies
     except (FloatingPointError, ValueError) as e:
         # Save NaN to indicate the weights overflowed and exit early:
         performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
+        performance_memmap[config_num]['results_excursions'][run_num] = np.full_like(performance_excursions, np.NaN)
         policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
         return
 
@@ -107,6 +121,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
     parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experiment/experience.npy', help='The file to read experience from')
+    parser.add_argument('--experience_file_test', type=str, default='experiment/experience_test.npy', help='The file to read experience from for evaluating the excursions objective')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
 
     # Policy evaluation parameters:
@@ -140,6 +155,10 @@ if __name__ == '__main__':
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
     experience_memmap = np.lib.format.open_memmap(args.experience_file, mode='r')
     num_runs, num_timesteps = experience_memmap.shape
+
+    # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
+    experience_memmap_test = np.lib.format.open_memmap(args.experience_file_test, mode='r')
+    num_runs, num_test_eval = experience_memmap_test.shape
 
     # Create the tile coder to be used for all parameter settings:
     dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
@@ -175,7 +194,8 @@ if __name__ == '__main__':
     # Create the memmapped array of performance results for the learned policies:
     performance_dtype = np.dtype([
         ('parameters', parameters_dtype),
-        ('results', float, (num_runs, num_policies, args.num_evaluation_runs))
+        ('results', float, (num_runs, num_policies, args.num_evaluation_runs)),
+        ('results_excursions', float, (num_runs, num_policies, num_test_eval))
     ])
     performance_memmap_path = str(output_dir / 'performance.npy')
     if os.path.isfile(performance_memmap_path):
@@ -186,7 +206,7 @@ if __name__ == '__main__':
     # Run ACE for each configuration in parallel:
     with utils.tqdm_joblib(tqdm(total=num_runs * len(args.parameters))) as progress_bar:
         Parallel(n_jobs=args.num_cpus, verbose=0)(
-            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed)
+            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test, num_test_eval)
             for config_num, parameters in enumerate(args.parameters)
             for run_num, random_seed in enumerate(random_seeds)
         )

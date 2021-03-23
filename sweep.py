@@ -14,6 +14,7 @@ if __name__ == '__main__':
     # Experiment parameters:
     parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
+    parser.add_argument('--experience_file_test', type=str, default='experience_test.npy', help='The file to read experience from for evaluating excursions')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
 
     parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
@@ -88,6 +89,7 @@ source $SCRATCH/actor-critic-with-emphatic-weightings/ve/bin/activate
 python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --output_dir \'sweep{script_num}\' \\
 --experience_file \'{args.experience_file}\' \\
+--experience_file_test \'{args.experience_file_test}\' \\
 --num_cpus {args.num_cpus} \\
 --num_runs {args.num_runs} \\
 --num_timesteps {args.num_timesteps} \\

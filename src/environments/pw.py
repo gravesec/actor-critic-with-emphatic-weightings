@@ -81,11 +81,12 @@ class puddleworld():
 
         if not self.was_reset:
             self.state = np.zeros(2)
-            self.state[0] = self.np_random.uniform(low=0, high=self.goal_x_coor)
-            self.state[1] = self.np_random.uniform(low=0, high=self.goal_y_coor)
 
-            # self.state[0] = self.np_random.uniform(low=0.4, high=0.45)
-            # self.state[1] = self.np_random.uniform(low=0.7, high=0.75)
+            # self.state[0] = self.np_random.uniform(low=0, high=self.goal_x_coor)
+            # self.state[1] = self.np_random.uniform(low=0, high=self.goal_y_coor)
+
+            self.state[0] = self.np_random.uniform(low=0.4, high=0.45)
+            self.state[1] = self.np_random.uniform(low=0.7, high=0.75)
 
             self.was_reset = True
 
@@ -94,6 +95,10 @@ class puddleworld():
     def reset(self):
         self.was_reset = False
         return self.internal_reset()
+
+    def set_state(self, state):
+        self.state = np.zeros(2)
+        self.state[:] = state
 
     def _get_ob(self):
         s = np.copy(self.state)
@@ -125,16 +130,17 @@ class puddleworld():
         ny = self.np_random.normal(scale=self.sigma)
 
         if a == 0: #up
-            ny += self.def_displacement
+            ypos += (self.def_displacement+ny)
+            xpos += nx
         elif a == 1: #down
-            ny -= self.def_displacement
+            ypos -= (self.def_displacement+ny)
+            xpos += nx
         elif a == 2: #right
-            nx += self.def_displacement
+            xpos += (self.def_displacement+nx)
+            ypos += ny
         else: #left
-            nx -= self.def_displacement
-
-        xpos += nx
-        ypos += ny
+            xpos -= (self.def_displacement+nx)
+            ypos += ny
 
         if xpos > self.pworld_max_x:
             xpos = self.pworld_max_x
