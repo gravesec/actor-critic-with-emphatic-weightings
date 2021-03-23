@@ -147,10 +147,6 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
     args, unknown_args = parser.parse_known_args()
 
-    # Generate the random seed for each run without replacement to prevent the birthday paradox:
-    random.seed(args.random_seed)
-    random_seeds = random.sample(range(2**32), args.num_evaluation_runs)
-
     # Save the command line arguments in a format interpretable by argparse:
     output_dir = Path(args.output_dir)
     utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
@@ -162,6 +158,10 @@ if __name__ == '__main__':
     # Load the input data as a memmap to prevent a copy being loaded into memory in each sub-process:
     experience_memmap_test = np.lib.format.open_memmap(args.experience_file_test, mode='r')
     num_runs, num_test_eval = experience_memmap_test.shape
+
+    # Generate the random seed for each run without replacement to prevent the birthday paradox:
+    random.seed(args.random_seed)
+    random_seeds = random.sample(range(2**32), num_runs)
 
     # Create the tile coder to be used for all parameter settings:
     dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
