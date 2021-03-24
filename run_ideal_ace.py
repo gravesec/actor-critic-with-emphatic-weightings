@@ -78,7 +78,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                 # performance[t // args.checkpoint_interval] = [evaluate_policy_avg_return(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
                 perf_excursions = []
                 for sample in range(num_test_eval):
-                    env.set_state(experience_memmap_test[run_num][sample][0])
+                    env.state = experience_memmap_test[run_num][sample][0]
                     perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps))
                 performance_excursions[t // args.checkpoint_interval] = perf_excursions
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
@@ -154,7 +154,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         performance[-1] = [evaluate_policy(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
         perf_excursions = []
         for sample in range(num_test_eval):
-            env.set_state(experience_memmap_test[run_num][sample][0])
+            env.state = experience_memmap_test[run_num][sample][0]
             perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps))
         performance_excursions[-1] = perf_excursions
         # performance[-1] = [evaluate_policy_avg_return(actor, tc, env, rng, args.max_timesteps) for _ in range(args.num_evaluation_runs)]
