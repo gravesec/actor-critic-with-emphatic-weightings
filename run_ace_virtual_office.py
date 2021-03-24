@@ -239,7 +239,7 @@ if __name__ == '__main__':
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
 
     # Run ACE for each configuration in parallel:
-    with utils.tqdm_joblib(tqdm(total=args.num_runs * len(args.parameters))) as progress_bar:
+    with utils.tqdm_joblib(tqdm(total=args.num_runs * len(args.parameters), smoothing=0)) as progress_bar:
         Parallel(n_jobs=args.num_cpus, verbose=0)(
             delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed)
             for config_num, parameters in enumerate(args.parameters)
