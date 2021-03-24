@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=735026919, help='The master random seed to use')
 
     parser.add_argument('--script_name', type=str, default='run_ace.py', help='The script to run on each node.')
-    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD'], default='TDC', help='Which critic to use.')
+    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD', 'TDRC'], default='TDRC', help='Which critic to use.')
     parser.add_argument('--all_actions', type=int, choices=[0, 1], default=0, help='Use all-actions updates instead of TD error-based updates.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha_v', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the critic\'s auxiliary weights.')
     parser.add_argument('--lambda_c', type=float, nargs='+', default=[(1 - 1/2**i) for i in range(6)], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', type=float, nargs='+', default=[1.], help='OffPAC/ACE tradeoff parameter.')
-    parser.add_argument('--num_tiles_per_dim', type=int, nargs=2, default=[4, 4], help='The number of tiles per dimension to use in the tile coder.')
+    parser.add_argument('--num_tiles_per_dim', type=int, nargs='+', default=[4, 4], help='The number of tiles per dimension to use in the tile coder.')
     parser.add_argument('--num_tilings', type=int, default=8, help='The number of tilings to use in the tile coder.')
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
 
