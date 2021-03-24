@@ -53,8 +53,8 @@ if __name__ == '__main__':
     output_dir = Path(args.output_dir)
     utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
 
-    # If using ETD critic, alpha_v is ignored, so make sure we don't run extra parameter combinations:
-    if args.critic == 'ETD':
+    # If using ETD or TDRC critic, alpha_v is ignored, so make sure we don't run extra parameter combinations:
+    if args.critic == 'ETD' or args.critic == 'TDRC':
         args.alpha_v = [0.]
 
     # Calculate how many nodes to use:
