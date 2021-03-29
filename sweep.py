@@ -25,7 +25,8 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', type=int, default=735026919, help='The master random seed to use')
 
     parser.add_argument('--script_name', type=str, default='run_ace.py', help='The script to run on each node.')
-    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD', 'TDRC'], default='TDRC', help='Which critic to use.')
+    parser.add_argument('--critic', type=str, choices=['ETD', 'TDRC'], default='TDRC', help='Which critic to use.')
+    parser.add_argument('--direct_f', type=int, choices=[0, 1], default=0, help='Use a function approximator to estimate the emphatic weightings.')
     parser.add_argument('--all_actions', type=int, choices=[0, 1], default=0, help='Use all-actions updates instead of TD error-based updates.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
@@ -34,7 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', '--discount_rate', type=float, default=.95, help='Discount rate.')
     parser.add_argument('--alpha_a', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the actor.')
     parser.add_argument('--alpha_w', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the critic.')
-    parser.add_argument('--alpha_v', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for the critic\'s auxiliary weights.')
+    parser.add_argument('--alpha_v', type=float, nargs='+', default=[1/2**i for i in range(15)], help='Step sizes for direct estimation of emphatic weightings.')
     parser.add_argument('--lambda_c', type=float, nargs='+', default=[(1 - 1/2**i) for i in range(6)], help='Trace decay rates for the critic.')
     parser.add_argument('--eta', type=float, nargs='+', default=[1.], help='OffPAC/ACE tradeoff parameter.')
     parser.add_argument('--num_tiles_per_dim', type=int, nargs='+', default=[4, 4], help='The number of tiles per dimension to use in the tile coder.')
@@ -53,8 +54,8 @@ if __name__ == '__main__':
     output_dir = Path(args.output_dir)
     utils.save_args_to_file(args, output_dir / Path(parser.prog).with_suffix('.args'))
 
-    # If using ETD or TDRC critic, alpha_v is ignored, so make sure we don't run extra parameter combinations:
-    if args.critic == 'ETD' or args.critic == 'TDRC':
+    # We only use alpha_v for direct estimation of emphatic weightings:
+    if not args.direct_f:
         args.alpha_v = [0.]
 
     # Calculate how many nodes to use:
@@ -98,6 +99,7 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --max_timesteps {args.max_timesteps} \\
 --random_seed {args.random_seed} \\
 --critic {args.critic} \\
+--direct_f {args.direct_f} \\
 --all_actions {args.all_actions} \\
 --normalize {args.normalize} \\
 --interest_function \'{args.interest_function}\' \\
