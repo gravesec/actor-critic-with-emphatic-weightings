@@ -69,7 +69,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
                 perf_excursions = []
                 for sample in range(num_test_eval):
                     env.state = experience_memmap_test[run_num][sample][0]
-                    perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps))
+                    perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps,state=experience_memmap_test[run_num][sample][0]))
                 performance_excursions[t // args.checkpoint_interval] = perf_excursions
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
@@ -118,7 +118,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         perf_excursions = []
         for sample in range(num_test_eval):
             env.state = experience_memmap_test[run_num][sample][0]
-            perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps))
+            perf_excursions.append(evaluate_policy(actor, tc, env, rng, args.max_timesteps,state=experience_memmap_test[run_num][sample][0]))
         performance_excursions[-1] = perf_excursions
 
         # Save the learned policies and their performance to the memmap:

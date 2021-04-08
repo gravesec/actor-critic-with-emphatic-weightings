@@ -13,10 +13,13 @@ from src.function_approximation.tile_coder import TileCoder
 from joblib import Parallel, delayed
 
 
-def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False):
+def evaluate_policy(actor, tc, env=None, rng=np.random, num_timesteps=1000, render=False, state=None):
     env = gym.make('MountainCar-v0').unwrapped if env is None else env
     g_t = 0.
-    indices_t = tc.encode(env.reset())
+    if state is not None:
+        indices_t = tc.encode(state)
+    else:
+        indices_t = tc.encode(env.reset())
     for t in range(num_timesteps):
         a_t = rng.choice(env.action_space.n, p=actor.pi(indices_t))
         s_tp1, r_tp1, terminal, _ = env.step(a_t)
