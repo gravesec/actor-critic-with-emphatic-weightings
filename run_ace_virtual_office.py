@@ -11,6 +11,7 @@ from joblib import Parallel, delayed
 from src.algorithms.ace import LinearACE
 from src.algorithms.etd import LinearETD
 from src.algorithms.tdrc import LinearTDRC
+from src.algorithms.fhat import LinearFHat
 
 
 def generate_experience(experience, run_num, random_seed):
@@ -88,6 +89,10 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     else:
         critic = LinearTDRC(dummy_obs.size, alpha_w, lambda_c)
 
+    if args.direct_f:
+        # Initialize the function approximator being used to estimate the emphatic weightings:
+        fhat = LinearFHat(dummy_obs.size, alpha_v, args.normalize)
+
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
 
@@ -110,21 +115,29 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
             o_t, a_t, r_tp1, o_tp1, a_tp1, terminal = transition
             gamma_tp1 = args.gamma if not terminal else 0  # Transition-dependent discounting.
             i_t = i(o_t, gamma_t)
+            i_tp1 = i(o_tp1, gamma_tp1)
             # Compute importance sampling ratio for the policy:
             pi_t = actor.pi(o_t)
             mu_t = mu(o_t)
             rho_t = pi_t[a_t] / mu_t[a_t]
 
-            f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
-            m_t = (1 - eta) * i_t + eta * f_t
-            if args.critic == 'ETD':
-                delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
-                critic.learn(delta_t, o_t, gamma_t, i_t, rho_t, f_t)
-                actor.learn(o_t, a_t, delta_t, m_t, rho_t)
+            if args.direct_f:
+                # Estimate emphatic weightings with the function approximator:
+                f_t = fhat.estimate(o_t)
+
+                # Update the function approximator:
+                fhat.learn(o_tp1, gamma_tp1, o_t, rho_t, i_tp1)
             else:
-                delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
+                # Estimate emphatic weightings with the follow-on trace:
+                f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
+            m_t = (1 - eta) * i_t + eta * f_t
+
+            delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
+            if args.critic == 'ETD':
+                critic.learn(delta_t, o_t, gamma_t, i_t, rho_t, f_t)
+            else:
                 critic.learn(delta_t, o_t, gamma_t, o_tp1, gamma_tp1, rho_t)
-                actor.learn(o_t, a_t, delta_t, m_t, rho_t)
+            actor.learn(o_t, a_t, delta_t, m_t, rho_t)
 
             gamma_t = gamma_tp1
             rho_tm1 = rho_t
@@ -155,6 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_evaluation_runs', type=int, default=10, help='The number of times to evaluate each policy')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--critic', type=str, choices=['TDRC', 'ETD'], default='TDRC', help='Which critic to use.')
+    parser.add_argument('--direct_f', type=int, choices=[0, 1], default=0, help='Use a function approximator to estimate the emphatic weightings.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([.2, .3, .3, .2])', help='Policy to use. Default is uniform random, slightly biased towards the \'south\' action.')
