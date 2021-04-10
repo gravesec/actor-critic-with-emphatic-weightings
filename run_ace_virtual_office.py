@@ -10,7 +10,7 @@ from pathlib import Path
 from joblib import Parallel, delayed
 from src.algorithms.ace import LinearACE
 from src.algorithms.etd import LinearETD
-from src.algorithms.tdc import LinearTDC
+from src.algorithms.tdrc import LinearTDRC
 
 
 def generate_experience(experience, run_num, random_seed):
@@ -80,11 +80,13 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     env.seed(random_seed)
     rng = env.np_random
 
+    # Create the agent:
+    # Note: no need to divide learning rate because the feature vectors are already normalized.
     actor = LinearACE(env.action_space.n, dummy_obs.size, alpha_a)
     if args.critic == 'ETD':
         critic = LinearETD(dummy_obs.size, alpha_w, lambda_c)
     else:
-        critic = LinearTDC(dummy_obs.size, alpha_w, alpha_v, lambda_c)
+        critic = LinearTDRC(dummy_obs.size, alpha_w, lambda_c)
 
     i = eval(args.interest_function)  # Create the interest function to use.
     mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
@@ -126,6 +128,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
             gamma_t = gamma_tp1
             rho_tm1 = rho_t
+
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
         performance[-1] = (t+1, [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)])
@@ -151,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_evaluation_runs', type=int, default=10, help='The number of times to evaluate each policy')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
-    parser.add_argument('--critic', type=str, choices=['TDC', 'ETD'], default='TDC', help='Which critic to use.')
+    parser.add_argument('--critic', type=str, choices=['TDRC', 'ETD'], default='TDRC', help='Which critic to use.')
     parser.add_argument('--normalize', type=int, choices=[0, 1], default=0, help='Estimate the discounted follow-on distribution instead of the discounted follow-on visit counts.')
     parser.add_argument('--interest_function', type=str, default='lambda s, g=1: 1.', help='Interest function to use. Example: \'lambda s, g=1: 1. if g==0. else 0.\' (episodic interest function)')
     parser.add_argument('--behaviour_policy', type=str, default='lambda s: np.array([.2, .3, .3, .2])', help='Policy to use. Default is uniform random, slightly biased towards the \'south\' action.')
