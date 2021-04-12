@@ -49,9 +49,57 @@ def generate_experience(experience, run_num, random_seed):
         a_t = a_tp1
 
 
-def evaluate_policy(actor, env, rng):
-    g = 0.
+def generate_experience_test(experience, run_num, random_seed):
+    # Initialize the environment:
+    import gym_virtual_office  # Re-import the env in each subprocess or it sometimes isn't found during creation.
+    env = gym.make(args.environment).unwrapped
+    env.seed(random_seed)
+    rng = env.np_random
+
+    # Create the behaviour policy:
+    mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Give the eval'd function access to some objects.
+
+    # Reset the environment:
     o_t = env.reset()['image'].ravel()
+    o_t = o_t / np.linalg.norm(o_t)  # normalize feature vector
+    a_t = rng.choice(env.action_space.n, p=mu(o_t))
+    t = 0
+    step = 0
+    while t != args.num_evaluation_runs_excursions:
+        # Take action a_t, observe next state s_tp1 and reward r_tp1:
+        o_tp1, r_tp1, terminal, _ = env.step(a_t)
+        o_tp1 = o_tp1['image'].ravel()
+        o_tp1 = o_tp1 / np.linalg.norm(o_tp1)  # normalize feature vector
+
+        # The agent is reset to a starting state after a terminal transition:
+        if terminal:
+            o_tp1 = env.reset()['image'].ravel()
+            o_tp1 = o_tp1 / np.linalg.norm(o_tp1)  # normalize feature vector
+
+        a_tp1 = rng.choice(env.action_space.n, p=mu(o_t))
+
+        step += 1
+        #adds every 1000th state as an evaluation state
+        if step % 1000 == 0:
+            # Store state information:
+            experience[run_num, t] = (env.agent_pos, env.agent_dir)
+            step = 0
+            t += 1
+
+        # Update temporary variables:
+        o_t = o_tp1
+        a_t = a_tp1
+
+
+def evaluate_policy(actor, env, rng, state=None):
+    g = 0.
+    if state is None:
+        o_t = env.reset()['image'].ravel()
+    else:
+        env.agent_pos = state[0]
+        env.agent_dir = state[1]
+        env.step_count = 0
+        o_t = env.gen_obs()['image'].ravel()
     for t in range(args.max_timesteps):
         a_t = rng.choice(env.action_space.n, p=actor.pi(o_t))
         o_tp1, r_tp1, terminal, _ = env.step(a_t)
@@ -63,7 +111,7 @@ def evaluate_policy(actor, env, rng):
     return g
 
 
-def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed):
+def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test):
     # If this run and configuration has already been done (i.e., previous run timed out), exit early:
     if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
         return
@@ -108,7 +156,9 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         for t, transition in enumerate(transitions):
             # Save and evaluate the learned policy if it's a checkpoint timestep:
             if t % args.checkpoint_interval == 0:
-                performance[t // args.checkpoint_interval] = (t, [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)])
+                episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
+                excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
+                performance[t // args.checkpoint_interval] = (t, episodic_results, excursions_results)
                 policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
             # Unpack the stored transition.
@@ -144,14 +194,16 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
 
         # Save and evaluate the policy after the final timestep:
         policies[-1] = (t+1, np.copy(actor.theta))
-        performance[-1] = (t+1, [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs)])
+        episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
+        excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
+        performance[-1] = (t+1, episodic_results, excursions_results)
 
         # Save the learned policies and their performance to the memmap:
-        performance_memmap[config_num]['performance'][run_num] = performance
+        performance_memmap[config_num]['results'][run_num] = performance
         policies_memmap[config_num]['policies'][run_num] = policies
     except (FloatingPointError, ValueError) as e:
         # Save NaN to indicate the weights overflowed and exit early:
-        performance_memmap[config_num]['performance'][run_num] = np.full_like(performance, np.NaN)
+        performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
         policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
         return
 
@@ -160,12 +212,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A script to run ACE (Actor-Critic with Emphatic weightings).', formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
     parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
+    parser.add_argument('--experience_file_test', type=str, default='experience_test.npy', help='The file to read experience from for evaluating the excursions objective')
     parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
     parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--random_seed', type=int, default=1944801619, help='The master random seed to use')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
-    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
-    parser.add_argument('--num_evaluation_runs', type=int, default=10, help='The number of times to evaluate each policy')
+    parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
+    parser.add_argument('--num_evaluation_runs_episodic', type=int, default=5, help='The number of times to evaluate each policy using the episodic measure')
+    parser.add_argument('--num_evaluation_runs_excursions', type=int, default=50, help='The number of times to evaluate each policy using the excursions measure')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--critic', type=str, choices=['TDRC', 'ETD'], default='TDRC', help='Which critic to use.')
     parser.add_argument('--direct_f', type=int, choices=[0, 1], default=0, help='Use a function approximator to estimate the emphatic weightings.')
@@ -177,9 +231,8 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--parameters', type=float, nargs=5, action='append', metavar=('alpha_a', 'alpha_w', 'alpha_v', 'lambda', 'eta'), help='Parameters to use. Can be specified multiple times to run multiple configurations in parallel.')
     args, unknown_args = parser.parse_known_args()
 
-    # Generate the random seed for each run without replacement to prevent the birthday paradox:
+    # Seed the random number generator:
     random.seed(args.random_seed)
-    random_seeds = random.sample(range(2**32), args.num_runs)
 
     # Save the command line arguments in a format interpretable by argparse:
     output_dir = Path(args.output_dir)
@@ -190,7 +243,8 @@ if __name__ == '__main__':
     dummy_obs = dummy_env.reset()['image'].ravel()
     num_policies = args.num_timesteps // args.checkpoint_interval + 1
 
-    # If the input file already exists:
+
+    # Load or generate the experience data file:
     transition_dtype = np.dtype([
         ('s_t', float, dummy_obs.size),
         ('a_t', int),
@@ -199,17 +253,39 @@ if __name__ == '__main__':
         ('a_tp1', int),
         ('terminal', bool)
     ])
+    # If the experience file already exists:
     if os.path.isfile(output_dir / args.experience_file):
         # load it as a memmap to prevent a copy being loaded into memory in each sub-process:
         experience_memmap = np.lib.format.open_memmap(output_dir / args.experience_file, mode='r')
     else:
         # otherwise, create it and populate it in parallel:
         experience_memmap = np.lib.format.open_memmap(output_dir / args.experience_file, shape=(args.num_runs, args.num_timesteps), dtype=transition_dtype, mode='w+')
+        # Generate the random seed for each run without replacement to prevent the birthday paradox:
+        random_seeds = random.sample(range(2**32), args.num_runs)
         with utils.tqdm_joblib(tqdm(total=args.num_runs)) as progress_bar:
             Parallel(n_jobs=args.num_cpus, verbose=0)(
                 delayed(generate_experience)(experience_memmap, run_num, random_seed)
                 for run_num, random_seed in enumerate(random_seeds)
             )
+
+
+    # Load or generate the file containing states drawn from the behaviour policy used for excursions evaluation:
+    state_dtype = np.dtype([
+        ('agent_pos', int, 2),
+        ('agent_dir', int)
+    ])
+    if os.path.isfile(output_dir / args.experience_file_test):
+        experience_memmap_test = np.lib.format.open_memmap(output_dir / args.experience_file_test, mode='r')
+    else:
+        experience_memmap_test = np.lib.format.open_memmap(output_dir / args.experience_file_test, shape=(args.num_runs, args.num_evaluation_runs_excursions), dtype=state_dtype, mode='w+')
+        # Generate the random seed for each run without replacement to prevent the birthday paradox:
+        random_seeds = random.sample(range(2**32), args.num_runs)
+        with utils.tqdm_joblib(tqdm(total=args.num_runs)) as progress_bar:
+            Parallel(n_jobs=args.num_cpus, verbose=0)(
+                delayed(generate_experience_test)(experience_memmap_test, run_num, random_seed)
+                for run_num, random_seed in enumerate(random_seeds)
+            )
+
 
     # Create or load the file for storing learned policies:
     policies_memmap_path = str(output_dir / 'policies.npy')
@@ -237,15 +313,17 @@ if __name__ == '__main__':
         # otherwise, create it:
         policies_memmap = np.lib.format.open_memmap(policies_memmap_path, shape=(len(args.parameters),), dtype=configuration_dtype, mode='w+')
 
+
     # Create or load the file for storing policy performance results:
-    performance_memmap_path = str(output_dir / 'episodic_performance.npy')
+    performance_memmap_path = str(output_dir / 'performance.npy')
     results_dtype = np.dtype([
         ('timesteps', int),
-        ('results', float, args.num_evaluation_runs)
+        ('episodic', float, args.num_evaluation_runs_episodic),
+        ('excursions', float, args.num_evaluation_runs_excursions)
     ])
     performance_dtype = np.dtype([
         ('parameters', parameters_dtype),
-        ('performance', results_dtype, (args.num_runs, num_policies))
+        ('results', results_dtype, (args.num_runs, num_policies))
     ])
     # If the file for storing the performance results for the learned policies already exists:
     if os.path.isfile(performance_memmap_path):
@@ -255,10 +333,13 @@ if __name__ == '__main__':
         # otherwise, create it:
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
 
+    # Generate the random seed for each run without replacement to prevent the birthday paradox:
+    random_seeds = random.sample(range(2**32), args.num_runs)
+
     # Run ACE for each configuration in parallel:
     with utils.tqdm_joblib(tqdm(total=args.num_runs * len(args.parameters), smoothing=0)) as progress_bar:
         Parallel(n_jobs=args.num_cpus, verbose=0)(
-            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed)
+            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test)
             for config_num, parameters in enumerate(args.parameters)
             for run_num, random_seed in enumerate(random_seeds)
         )
