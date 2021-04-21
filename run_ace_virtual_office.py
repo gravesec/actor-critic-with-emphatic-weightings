@@ -111,17 +111,23 @@ def evaluate_policy(actor, env, rng, state=None):
     return g
 
 
-def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test):
-    # If this run and configuration has already been done (i.e., previous run timed out), exit early:
-    if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
-        return
+def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test, performance_memmap2):
+    
+    if not args.eval_only:
+        # If this run and configuration has already been done (i.e., previous run timed out), exit early:
+        if np.count_nonzero(policies_memmap[config_num]['policies'][run_num]) != 0:
+            return
 
     alpha_a, alpha_w, alpha_v, lambda_c, eta = parameters
 
     # If this is the first run with a set of parameters, save the parameters:
     if run_num == 0:
-        policies_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma)
-        performance_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma)
+        if args.eval_only:
+            performance_memmap2[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma)
+        else:
+            policies_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma)
+            performance_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma)
+
 
     # Create the environment to evaluate the learned policy in:
     import gym_virtual_office
@@ -132,79 +138,121 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
     # Create the agent:
     # Note: no need to divide learning rate because the feature vectors are already normalized.
     actor = LinearACE(env.action_space.n, dummy_obs.size, alpha_a)
-    if args.critic == 'ETD':
-        critic = LinearETD(dummy_obs.size, alpha_w, lambda_c)
+
+    if not args.eval_only:
+        if args.critic == 'ETD':
+            critic = LinearETD(dummy_obs.size, alpha_w, lambda_c)
+        else:
+            critic = LinearTDRC(dummy_obs.size, alpha_w, lambda_c)
+        if args.direct_f:
+            # Initialize the function approximator being used to estimate the emphatic weightings:
+            fhat = LinearFHat(dummy_obs.size, alpha_v, args.normalize)
+
+        i = eval(args.interest_function)  # Create the interest function to use.
+        mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
+
+        policies = np.zeros(num_policies, dtype=policies_dtype)
+        performance = np.zeros(num_policies, dtype=results_dtype)
     else:
-        critic = LinearTDRC(dummy_obs.size, alpha_w, lambda_c)
-
-    if args.direct_f:
-        # Initialize the function approximator being used to estimate the emphatic weightings:
-        fhat = LinearFHat(dummy_obs.size, alpha_v, args.normalize)
-
-    i = eval(args.interest_function)  # Create the interest function to use.
-    mu = eval(args.behaviour_policy, {'np': np, 'env': env})  # Create the behaviour policy and give it access to numpy and the env.
-
-    policies = np.zeros(num_policies, dtype=policies_dtype)
-    performance = np.zeros(num_policies, dtype=results_dtype)
+        performance2 = np.zeros(num_policies, dtype=results_dtype)
 
     np.seterr(divide='raise', over='raise', invalid='raise')
     try:
+        # results_dtype = np.dtype([
+        #     ('timesteps', int),
+        #     ('episodic', float, args.num_evaluation_runs_episodic),
+        #     ('excursions', float, args.num_evaluation_runs_excursions)
+        # ])
+        # performance_dtype = np.dtype([
+        #     ('parameters', parameters_dtype),
+        #     ('results', results_dtype, (args.num_runs, num_policies))
+        # ])
+        if args.eval_only:
+            if performance_memmap2[config_num]['results'][run_num][0,0]['timesteps'] != 0:
+                return
+
         transitions = experience_memmap[run_num]
+
         gamma_t = 0.
         f_t = 0.
         rho_tm1 = 1.
         for t, transition in enumerate(transitions):
-            # Save and evaluate the learned policy if it's a checkpoint timestep:
-            if t % args.checkpoint_interval == 0:
-                episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
-                excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
-                performance[t // args.checkpoint_interval] = (t, episodic_results, excursions_results)
-                policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
-
-            # Unpack the stored transition.
-            o_t, a_t, r_tp1, o_tp1, a_tp1, terminal = transition
-            gamma_tp1 = args.gamma if not terminal else 0  # Transition-dependent discounting.
-            i_t = i(o_t, gamma_t)
-            i_tp1 = i(o_tp1, gamma_tp1)
-            # Compute importance sampling ratio for the policy:
-            pi_t = actor.pi(o_t)
-            mu_t = mu(o_t)
-            rho_t = pi_t[a_t] / mu_t[a_t]
-
-            if args.direct_f:
-                # Estimate emphatic weightings with the function approximator:
-                f_t = fhat.estimate(o_t)
-
-                # Update the function approximator:
-                fhat.learn(o_tp1, gamma_tp1, o_t, rho_t, i_tp1)
+            
+            if args.eval_only:
+                if t % args.checkpoint_interval == 0:
+                    # Load the learned policy:
+                    actor.theta = policies_memmap[config_num]['policies'][run_num][t // args.checkpoint_interval][1]
+                    # Evaluate the learned policy:
+                    episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
+                    # excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
+                    excursions_results = performance_memmap[config_num]['results'][run_num][t // args.checkpoint_interval]['excursions']
+                    performance2[t // args.checkpoint_interval] = (t, episodic_results, excursions_results)
             else:
-                # Estimate emphatic weightings with the follow-on trace:
-                f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
-            m_t = (1 - eta) * i_t + eta * f_t
+                # Save and evaluate the learned policy if it's a checkpoint timestep:
+                if t % args.checkpoint_interval == 0:
+                    episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
+                    excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
+                    performance[t // args.checkpoint_interval] = (t, episodic_results, excursions_results)
+                    policies[t // args.checkpoint_interval] = (t, np.copy(actor.theta))
 
-            delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
-            if args.critic == 'ETD':
-                critic.learn(delta_t, o_t, gamma_t, i_t, rho_t, f_t)
-            else:
-                critic.learn(delta_t, o_t, gamma_t, o_tp1, gamma_tp1, rho_t)
-            actor.learn(o_t, a_t, delta_t, m_t, rho_t)
+                # Unpack the stored transition.
+                o_t, a_t, r_tp1, o_tp1, a_tp1, terminal = transition
+                gamma_tp1 = args.gamma if not terminal else 0  # Transition-dependent discounting.
+                i_t = i(o_t, gamma_t)
+                i_tp1 = i(o_tp1, gamma_tp1)
+                # Compute importance sampling ratio for the policy:
+                pi_t = actor.pi(o_t)
+                mu_t = mu(o_t)
+                rho_t = pi_t[a_t] / mu_t[a_t]
 
-            gamma_t = gamma_tp1
-            rho_tm1 = rho_t
+                if args.direct_f:
+                    # Estimate emphatic weightings with the function approximator:
+                    f_t = fhat.estimate(o_t)
 
-        # Save and evaluate the policy after the final timestep:
-        policies[-1] = (t+1, np.copy(actor.theta))
-        episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
-        excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
-        performance[-1] = (t+1, episodic_results, excursions_results)
+                    # Update the function approximator:
+                    fhat.learn(o_tp1, gamma_tp1, o_t, rho_t, i_tp1)
+                else:
+                    # Estimate emphatic weightings with the follow-on trace:
+                    f_t = (1 - gamma_t) * i_t + rho_tm1 * gamma_t * f_t if args.normalize else i_t + rho_tm1 * gamma_t * f_t
+                m_t = (1 - eta) * i_t + eta * f_t
 
-        # Save the learned policies and their performance to the memmap:
-        performance_memmap[config_num]['results'][run_num] = performance
-        policies_memmap[config_num]['policies'][run_num] = policies
+                delta_t = r_tp1 + gamma_tp1 * critic.estimate(o_tp1) - critic.estimate(o_t)
+                if args.critic == 'ETD':
+                    critic.learn(delta_t, o_t, gamma_t, i_t, rho_t, f_t)
+                else:
+                    critic.learn(delta_t, o_t, gamma_t, o_tp1, gamma_tp1, rho_t)
+                actor.learn(o_t, a_t, delta_t, m_t, rho_t)
+
+                gamma_t = gamma_tp1
+                rho_tm1 = rho_t
+
+        if args.eval_only:
+            # Load the learned policy:
+            actor.theta = policies_memmap[config_num]['policies'][run_num][-1][1]
+            # Evaluate the learned policy:
+            episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
+            # excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
+            excursions_results = performance_memmap[config_num]['results'][run_num][-1]['excursions']
+            performance2[-1] = (t+1, episodic_results, excursions_results)
+
+            performance_memmap2[config_num]['results'][run_num] = performance2
+        else:
+            # Save and evaluate the policy after the final timestep:
+            policies[-1] = (t+1, np.copy(actor.theta))
+            episodic_results = [evaluate_policy(actor, env, rng) for _ in range(args.num_evaluation_runs_episodic)]
+            excursions_results = [evaluate_policy(actor, env, rng, state=experience_memmap_test[run_num][sample]) for sample in range(args.num_evaluation_runs_excursions)]
+            performance[-1] = (t+1, episodic_results, excursions_results)
+
+            # Save the learned policies and their performance to the memmap:
+            performance_memmap[config_num]['results'][run_num] = performance
+            policies_memmap[config_num]['policies'][run_num] = policies
     except (FloatingPointError, ValueError) as e:
-        # Save NaN to indicate the weights overflowed and exit early:
-        performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
-        policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
+        if args.eval_only:
+            performance_memmap2[config_num]['results'][run_num] = np.full_like(performance2, np.NaN)
+        else:
+            # Save NaN to indicate the weights overflowed and exit early:
+            performance_memmap[config_num]['results'][run_num] = np.full_like(performance, np.NaN)
+            policies_memmap[config_num]['policies'][run_num] = np.full_like(policies, np.NaN)
         return
 
 
@@ -220,6 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_interval', type=int, default=5000, help='The number of timesteps after which to save the learned policy.')
     parser.add_argument('--num_evaluation_runs_episodic', type=int, default=5, help='The number of times to evaluate each policy using the episodic measure')
     parser.add_argument('--num_evaluation_runs_excursions', type=int, default=50, help='The number of times to evaluate each policy using the excursions measure')
+    parser.add_argument('--eval_only', type=int, choices=[0, 1], default=0, help='Whether to only evaluate policies or not.')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--critic', type=str, choices=['TDRC', 'ETD'], default='TDRC', help='Which critic to use.')
     parser.add_argument('--direct_f', type=int, choices=[0, 1], default=0, help='Use a function approximator to estimate the emphatic weightings.')
@@ -333,13 +382,21 @@ if __name__ == '__main__':
         # otherwise, create it:
         performance_memmap = np.lib.format.open_memmap(performance_memmap_path, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
 
+    performance_memmap2 = None
+    if args.eval_only:        
+        performance_memmap_path2 = str(output_dir / 'performance2.npy')
+        if os.path.isfile(performance_memmap_path2):
+            performance_memmap2 = np.lib.format.open_memmap(performance_memmap_path2, mode='r+')
+        else:
+            performance_memmap2 = np.lib.format.open_memmap(performance_memmap_path2, shape=(len(args.parameters),), dtype=performance_dtype, mode='w+')
+
     # Generate the random seed for each run without replacement to prevent the birthday paradox:
     random_seeds = random.sample(range(2**32), args.num_runs)
 
     # Run ACE for each configuration in parallel:
     with utils.tqdm_joblib(tqdm(total=args.num_runs * len(args.parameters), smoothing=0)) as progress_bar:
         Parallel(n_jobs=args.num_cpus, verbose=0)(
-            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test)
+            delayed(run_ace)(experience_memmap, policies_memmap, performance_memmap, run_num, config_num, parameters, random_seed, experience_memmap_test, performance_memmap2)
             for config_num, parameters in enumerate(args.parameters)
             for run_num, random_seed in enumerate(random_seeds)
         )
