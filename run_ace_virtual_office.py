@@ -168,7 +168,7 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         #     ('results', results_dtype, (args.num_runs, num_policies))
         # ])
         if args.eval_only:
-            if performance_memmap2[config_num]['results'][run_num][0,0]['timesteps'] != 0:
+            if performance_memmap2[config_num]['results'][run_num][0]['timesteps'] != 0:
                 return
 
         transitions = experience_memmap[run_num]
