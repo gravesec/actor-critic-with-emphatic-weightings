@@ -13,8 +13,6 @@ entrypoints==0.3
 future==0.18.2
 gym==0.18.0
 gym-minigrid==1.0.2
--e git+git@github.com:EhsanEI/gym-puddle.git@8f955941b1c3a1b4ee53754ae23aced091b32677#egg=gym_puddle
--e git+git@github.com:gravesec/gym-virtual-office.git@37a0b36f8041e05543ac3a1dc1ffcd23cba310b1#egg=gym_virtual_office
 importlib-metadata==3.4.0
 ipykernel==5.4.3
 ipython==7.16.1
