@@ -14,6 +14,7 @@ from src.algorithms.tdc import BinaryTDC, BinaryGQ
 from src.algorithms.tdrc import BinaryTDRC
 from src.algorithms.fhat import BinaryFHat
 from src.function_approximation.tile_coder import TileCoder
+from src.environments.pw import puddleworld
 from evaluate_policies import evaluate_policy
 
 
@@ -31,8 +32,11 @@ def run_ace(experience_memmap, policies_memmap, performance_memmap, run_num, con
         performance_memmap[config_num]['parameters'] = (alpha_a, alpha_w, alpha_v, lambda_c, eta, args.gamma, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
 
     # Create the environment to evaluate the learned policy in:
-    import gym_puddle
-    env = gym.make(args.environment).unwrapped
+    if args.environment == 'pw':
+        env = puddleworld()
+    else:
+        import gym_puddle
+        env = gym.make(args.environment).unwrapped
     env.seed(random_seed)
     rng = env.np_random
 
@@ -179,7 +183,10 @@ if __name__ == '__main__':
     random_seeds = random.sample(range(2**32), num_runs)
 
     # Create the tile coder to be used for all parameter settings:
-    dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
+    if args.environment == 'pw':
+        dummy_env = puddleworld()
+    else:
+        dummy_env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info.
     tc = TileCoder(np.array([dummy_env.observation_space.low, dummy_env.observation_space.high]).T, args.num_tiles_per_dim, args.num_tilings, args.bias_unit)
 
     # Create the memmapped array of learned policies that will be populated in parallel:
