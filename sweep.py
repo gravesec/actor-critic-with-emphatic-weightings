@@ -12,15 +12,18 @@ from pathlib import Path
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Experiment parameters:
-    parser.add_argument('--output_dir', type=str, default='experiment', help='The directory to write experiment files to')
+    parser.add_argument('--output_dir', type=str, default='$SCRATCH/actor-critic-with-emphatic-weightings/virtual-office/', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
     parser.add_argument('--experience_file_test', type=str, default='experience_test.npy', help='The file to read experience from for evaluating excursions')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
 
-    parser.add_argument('--num_runs', type=int, default=5, help='The number of independent runs of experience to generate')
-    parser.add_argument('--num_timesteps', type=int, default=20000, help='The number of timesteps of experience to generate per run')
+    parser.add_argument('--num_runs', type=int, default=30, help='The number of independent runs of experience to generate')
+    parser.add_argument('--num_timesteps', type=int, default=100000, help='The number of timesteps of experience to generate per run')
     parser.add_argument('--checkpoint_interval', type=int, default=1000, help='The number of timesteps after which to save the learned policy.')
-    parser.add_argument('--num_evaluation_runs', type=int, default=10, help='The number of times to evaluate each policy')
+    parser.add_argument('--num_evaluation_runs_episodic', type=int, default=50, help='The number of times to evaluate each policy using the episodic measure')
+    parser.add_argument('--num_evaluation_runs_excursions', type=int, default=50, help='The number of times to evaluate each policy using the excursions measure')
+    parser.add_argument('--eval_only', type=int, choices=[0, 1], default=0, help='Whether to only evaluate policies or not.')
+    parser.add_argument('--num_evaluation_runs', type=int, default=50, help='The number of times to evaluate each policy')
     parser.add_argument('--max_timesteps', type=int, default=1000, help='The maximum number of timesteps allowed per policy evaluation')
     parser.add_argument('--random_seed', type=int, default=735026919, help='The master random seed to use')
 
@@ -43,8 +46,8 @@ if __name__ == '__main__':
     parser.add_argument('--bias_unit', type=int, choices=[0, 1], default=1, help='Whether or not to include a bias unit in the tile coder.')
 
     # Script parameters:
-    parser.add_argument('--seconds_per_combination', type=float, default=.125, help='Predicted time in seconds it takes for a single parameter combination to run once on a node. To estimate this, run an experiment script on one node for ~15 minutes and check the output; tqdm reports seconds per iteration.')
-    parser.add_argument('--num_hours', type=int, default=12, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
+    parser.add_argument('--seconds_per_combination', type=float, default=.7, help='Predicted time in seconds it takes for a single parameter combination to run once on a node. To estimate this, run an experiment script on one node for ~15 minutes and check the output; tqdm reports seconds per iteration.')
+    parser.add_argument('--num_hours', type=int, default=1, help='Number of hours the job should run for. On Niagara consider using one of: 1, 3, 12, 24.')
     parser.add_argument('--email', type=str, default='graves@ualberta.ca', help='Email address to report updates to.')
     parser.add_argument('--account', type=str, default='def-sutton', help='Allocation string to use in slurm.')
     parser.add_argument('--cores_per_node', type=int, default=80, help='Number of cores per node on the cluster. Niagara is 40 or 80 with hyperthreading.')
@@ -80,14 +83,14 @@ if __name__ == '__main__':
 #SBATCH --mail-user={args.email}
 #SBATCH --mail-type=ALL
 #SBATCH --account={args.account}
-#SBATCH --job-name=sweep{script_num}
+#SBATCH --job-name={output_dir.name}{script_num}
 #SBATCH --output=./sweep{script_num}/slurm-%j.out
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={args.cores_per_node}
 #SBATCH --time=00-{args.num_hours}:00:00  # DD-HH:MM:SS
 module load python/3.6.8
-source $SCRATCH/actor-critic-with-emphatic-weightings/ve/bin/activate
-python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
+source $HOME/actor-critic-with-emphatic-weightings/ve/bin/activate
+python $HOME/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --output_dir \'sweep{script_num}\' \\
 --experience_file \'{args.experience_file}\' \\
 --experience_file_test \'{args.experience_file_test}\' \\
@@ -96,6 +99,9 @@ python $SCRATCH/actor-critic-with-emphatic-weightings/{args.script_name} \\
 --num_timesteps {args.num_timesteps} \\
 --checkpoint_interval {args.checkpoint_interval} \\
 --num_evaluation_runs {args.num_evaluation_runs} \\
+--num_evaluation_runs_episodic {args.num_evaluation_runs_episodic} \\
+--num_evaluation_runs_excursions {args.num_evaluation_runs_excursions} \\
+--eval_only {args.eval_only} \\
 --max_timesteps {args.max_timesteps} \\
 --random_seed {args.random_seed} \\
 --critic {args.critic} \\
