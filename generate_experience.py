@@ -5,6 +5,7 @@ import random
 import argparse
 import numpy as np
 from src import utils
+from src.environments.pw import puddleworld
 from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
@@ -16,10 +17,11 @@ def generate_experience(experience, run_num, random_seed):
         return
 
     # Initialize the environment:
-    import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
-    env = gym.make(args.environment)
-    if args.environment != 'PuddleWorld-v0':
-        env = env.env
+    if args.environment == 'pw':
+        env = puddleworld()
+    else:
+        import gym_puddle
+        env = gym.make(args.environment).unwrapped
     env.seed(random_seed)
     rng = env.np_random
 
@@ -53,10 +55,11 @@ def generate_experience_test(experience, run_num, random_seed):
         return
 
     # Initialize the environment:
-    import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
-    env = gym.make(args.environment)
-    if args.environment != 'PuddleWorld-v0':
-        env = env.env
+    if args.environment == 'pw':
+        env = puddleworld()
+    else:
+        import gym_puddle  # Re-import the puddleworld env in each subprocess or it sometimes isn't found during creation.
+        env = gym.make(args.environment).unwrapped
     env.seed(random_seed)
     rng = env.np_random
 
@@ -119,7 +122,10 @@ if __name__ == '__main__':
         utils.save_args_to_file(args, output_dir / 'experience_test.args')
 
         # Create the memmapped structured array of experience to be populated in parallel:
-        env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info for observations.
+        if args.environment == 'pw':
+            env = puddleworld()
+        else:
+            env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info for observations.
         transition_dtype = np.dtype([
             ('s_t', float, env.observation_space.shape)
         ])
@@ -141,7 +147,10 @@ if __name__ == '__main__':
         utils.save_args_to_file(args, output_dir / 'experience.args')
 
         # Create the memmapped structured array of experience to be populated in parallel:
-        env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info for observations.
+        if args.environment == 'pw':
+            env = puddleworld()
+        else:
+            env = gym.make(args.environment).unwrapped  # Make a dummy env to get shape info for observations.
         transition_dtype = np.dtype([
             ('s_t', float, env.observation_space.shape),
             ('a_t', int),
