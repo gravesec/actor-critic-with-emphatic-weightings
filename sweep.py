@@ -12,7 +12,7 @@ from pathlib import Path
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(fromfile_prefix_chars='@', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Experiment parameters:
-    parser.add_argument('--output_dir', type=str, default='$SCRATCH/actor-critic-with-emphatic-weightings/virtual-office/', help='The directory to write experiment files to')
+    parser.add_argument('--output_dir', type=str, default='$SCRATCH/actor-critic-with-emphatic-weightings/mountain-car/', help='The directory to write experiment files to')
     parser.add_argument('--experience_file', type=str, default='experience.npy', help='The file to read experience from')
     parser.add_argument('--experience_file_test', type=str, default='experience_test.npy', help='The file to read experience from for evaluating excursions')
     parser.add_argument('--num_cpus', type=int, default=-1, help='The number of cpus to use (-1 for all).')
